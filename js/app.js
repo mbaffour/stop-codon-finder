@@ -63,11 +63,43 @@
     vizSvgs: {},           // { frame|density|circular : <svg> } for figure export
     fileBaseName: 'stop_codon_report',
     sort: { key: 'start', dir: 'asc' },
-    geneSort: { key: 'internalStops', dir: 'desc' }
+    geneSort: { key: 'internalStops', dir: 'desc' },
+    colorScheme: (global.CodonPalettes && global.CodonPalettes.DEFAULT_ID) || 'colourblind-safe'
   };
 
   function $(id) { return document.getElementById(id); }
   function fmtInt(n) { return Number(n).toLocaleString(); }
+
+  // Count-up on the summary stat values when results first appear. Preserves the
+  // formatted prefix/suffix ("1,234 bp", "45.2%", "2.13 /kb"). No-ops under
+  // reduced-motion, when the tab is hidden, or for very large result sets.
+  function animateStatCounts() {
+    var reduce = global.matchMedia && global.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var big = state.summary && state.summary.totalStops > 20000;
+    var vals = document.querySelectorAll('#stat-grid .stat-value');
+    if (reduce || document.hidden || big) return;      // leave final text as-is
+    vals.forEach(function (el) {
+      var full = el.textContent;
+      var m = full.match(/^([^\d-]*)(-?[\d,]*\.?\d+)(.*)$/);
+      if (!m) return;
+      var pre = m[1], suf = m[3];
+      var decimals = (m[2].split('.')[1] || '').length;
+      var target = parseFloat(m[2].replace(/,/g, ''));
+      if (!isFinite(target)) return;
+      var t0 = performance.now(), dur = 650;
+      el.textContent = pre + '0' + (decimals ? '.' + '0'.repeat(decimals) : '') + suf;
+      function step(now) {
+        var k = Math.min(1, (now - t0) / dur);
+        var e = 1 - Math.pow(1 - k, 3);                // easeOutCubic
+        var v = target * e;
+        var s = decimals ? v.toFixed(decimals) : Math.round(v).toLocaleString();
+        el.textContent = pre + s + suf;
+        if (k < 1 && !document.hidden) requestAnimationFrame(step);
+        else el.textContent = full;                    // snap to exact final string
+      }
+      requestAnimationFrame(step);
+    });
+  }
 
   // ====================================================================
   // Theme
@@ -95,8 +127,56 @@
     document.documentElement.setAttribute('data-theme', next);
     try { global.localStorage.setItem('scf-theme', next); } catch (e) {}
     updateThemeIcon();
+    // Re-stamp the active codon scheme for the new theme. The scheme is applied
+    // as INLINE custom properties on <html>, which override the stylesheet's
+    // theme blocks, so it must be re-applied whenever the theme flips.
+    applyColorScheme();
     // Re-render color-driven visuals so codon/context hues track the theme.
     if (state.summary) { renderStatCards(); renderFrameBreakdown(); renderResultsTable(); renderViz(); }
+  }
+
+  // ====================================================================
+  // Codon colour scheme (palettes.js registry, persisted like the theme)
+  // ====================================================================
+
+  var COLOR_SCHEME_KEY = 'scf-color-scheme';
+
+  // Stamp the active scheme's --codon-* / --codon-*-ink onto <html> for the
+  // current effective theme.
+  function applyColorScheme() {
+    if (!global.CodonPalettes) return;
+    global.CodonPalettes.apply(state.colorScheme, currentEffectiveTheme());
+  }
+
+  function initColorScheme() {
+    var sel = $('scheme-select');
+    if (!global.CodonPalettes) { if (sel) sel.parentNode.hidden = true; return; }
+    var saved = null;
+    try { saved = global.localStorage.getItem(COLOR_SCHEME_KEY); } catch (e) {}
+    if (saved && global.CodonPalettes.has(saved)) state.colorScheme = saved;
+    if (sel) {
+      sel.innerHTML = '';
+      global.CodonPalettes.list().forEach(function (s) {
+        var opt = document.createElement('option');
+        opt.value = s.id; opt.textContent = s.label;
+        if (s.note) opt.title = s.note;
+        sel.appendChild(opt);
+      });
+      sel.value = state.colorScheme;
+      sel.addEventListener('change', function () { setColorScheme(sel.value); });
+    }
+    applyColorScheme();
+  }
+
+  function setColorScheme(id) {
+    if (!global.CodonPalettes || !global.CodonPalettes.has(id)) return;
+    state.colorScheme = id;
+    try { global.localStorage.setItem(COLOR_SCHEME_KEY, id); } catch (e) {}
+    applyColorScheme();
+    // Everything on screen paints via var(--codon-*); re-render the colour-driven
+    // views so any cached SVG/markup repaints immediately.
+    if (state.summary) { renderStatCards(); renderFrameBreakdown(); renderResultsTable(); renderViz(); }
+    announce('Colour scheme: ' + (global.CodonPalettes.get(id).label || id));
   }
 
   // ====================================================================
@@ -721,6 +801,7 @@
     buildVizRecordSelect();
     renderViz();
     showResultsSection(true);
+    animateStatCounts();
 
     var rows = getFilteredSortedDisplayHits().slice(0, MAX_TABLE_ROWS);
     global.ScanProgress.enter('render', Math.max(1, rows.length));
@@ -1363,10 +1444,138 @@
     var fullSummary = global.CodonReport.buildSummary(state.hits, state.records, { stopCodons: activeStopSet() });
     // Carry the organism the user indicated + chosen table as export provenance.
     fullSummary.provenance = provenanceMeta();
+    // Fold the per-gene summary + per-frame breakdown into the same document so
+    // one JSON download carries every table shown in the UI.
+    var extras = { stops: activeStops() };
+    if (state.geneSummary && state.geneSummary.length) extras.geneSummary = state.geneSummary;
     global.CodonReport.triggerDownload(
       baseFilename() + '.stop_codons.json',
-      global.CodonReport.toJSON(fullSummary, state.hits),
+      global.CodonReport.toJSON(fullSummary, state.hits, extras),
       'application/json;charset=utf-8'
+    );
+  }
+
+  function onDownloadTsv() {
+    if (!state.summary) return;
+    global.CodonReport.triggerDownload(
+      baseFilename() + '.stop_codons.tsv',
+      global.CodonReport.toTSV(state.hits, { includeAnnotation: state.annotationActive }),
+      'text/tab-separated-values;charset=utf-8'
+    );
+  }
+
+  function onDownloadMarkdown() {
+    if (!state.summary) return;
+    global.CodonReport.triggerDownload(
+      baseFilename() + '.stop_codons.md',
+      global.CodonReport.toMarkdown(state.hits, { includeAnnotation: state.annotationActive }),
+      'text/markdown;charset=utf-8'
+    );
+  }
+
+  // Copy text to the clipboard with a file:// -safe fallback (the async
+  // Clipboard API is often blocked under file://, so fall back to a hidden
+  // textarea + execCommand). Reports success/failure via the existing banners.
+  function copyToClipboard(text, label) {
+    function done() { showSuccess(label + ' copied to the clipboard.'); announce(label + ' copied.'); }
+    function fail() { showInfo('Could not access the clipboard. Use a download button instead.'); }
+    if (global.navigator && global.navigator.clipboard && global.navigator.clipboard.writeText) {
+      global.navigator.clipboard.writeText(text).then(done, function () { legacyCopy(text) ? done() : fail(); });
+    } else {
+      legacyCopy(text) ? done() : fail();
+    }
+  }
+  function legacyCopy(text) {
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed'; ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      var ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      return ok;
+    } catch (e) { return false; }
+  }
+
+  function onCopyTsv() {
+    if (!state.summary) { showInfo('Run a scan first, then copy the table.'); return; }
+    copyToClipboard(global.CodonReport.toTSV(state.hits, { includeAnnotation: state.annotationActive }),
+      'Results table (TSV)');
+  }
+  function onCopyMarkdown() {
+    if (!state.summary) { showInfo('Run a scan first, then copy the table.'); return; }
+    copyToClipboard(global.CodonReport.toMarkdown(state.hits, { includeAnnotation: state.annotationActive }),
+      'Results table (Markdown)');
+  }
+
+  // Concrete light-theme, AA-on-white codon ramps for the standalone HTML report
+  // (which is deliberately a light, print-friendly sheet regardless of the app's
+  // current theme). Falls back to the Okabe–Ito defaults if palettes are absent.
+  function reportColors() {
+    if (global.CodonPalettes) {
+      var sc = global.CodonPalettes.get(state.colorScheme);
+      if (sc) return { codonFills: sc.fillLight.slice(), codonInks: sc.inkLight.slice() };
+    }
+    return null;
+  }
+
+  function onDownloadHtmlReport() {
+    if (!state.summary || !global.CodonReport.toHTMLReport) return;
+    var stops = activeStops();
+    var fullSummary = global.CodonReport.buildSummary(state.hits, state.records, { stopCodons: activeStopSet() });
+    fullSummary.provenance = provenanceMeta();
+    // Static copy of the key chart (per-frame breakdown) over the FULL hit set.
+    var chartSVG = buildFrameChartSVG(tallyFrameCodon(state.hits, stops), stops);
+    var stopNames = {};
+    stops.forEach(function (c) {
+      stopNames[c] = (global.CodonTables.STOP_NAME && global.CodonTables.STOP_NAME[c]) || 'stop';
+    });
+    var html = global.CodonReport.toHTMLReport({
+      title: 'Stop Codon Finder report — ' + baseFilename(),
+      generatedAt: new Date().toISOString(),
+      summary: fullSummary,
+      provenance: {
+        organism: state.userOrganism || null,
+        translationTable: { id: state.activeTableId, name: global.CodonTables.get(state.activeTableId).name }
+      },
+      hits: state.hits,
+      geneSummary: state.geneSummary,
+      stops: stops,
+      stopNames: stopNames,
+      includeAnnotation: state.annotationActive,
+      chartSVG: chartSVG,
+      colors: reportColors(),
+      maxRows: MAX_TABLE_ROWS
+    });
+    global.CodonReport.triggerDownload(
+      baseFilename() + '.stop_codons.report.html',
+      html,
+      'text/html;charset=utf-8'
+    );
+  }
+
+  // ---- Per-gene summary + per-frame breakdown table downloads ----------
+  function onDownloadGeneSummary(fmt) {
+    if (!state.geneSummary || !state.geneSummary.length) { showInfo('No per-gene summary to download (load an annotation with CDS features).'); return; }
+    var isTsv = fmt === 'tsv';
+    global.CodonReport.triggerDownload(
+      baseFilename() + '.gene_summary.' + (isTsv ? 'tsv' : 'csv'),
+      isTsv ? global.CodonReport.geneSummaryToTSV(state.geneSummary)
+            : global.CodonReport.geneSummaryToCSV(state.geneSummary),
+      (isTsv ? 'text/tab-separated-values' : 'text/csv') + ';charset=utf-8'
+    );
+  }
+  function onDownloadFrameBreakdown(fmt) {
+    if (!state.summary) return;
+    var isTsv = fmt === 'tsv';
+    var stops = activeStops();
+    global.CodonReport.triggerDownload(
+      baseFilename() + '.frame_breakdown.' + (isTsv ? 'tsv' : 'csv'),
+      isTsv ? global.CodonReport.frameBreakdownToTSV(state.hits, stops)
+            : global.CodonReport.frameBreakdownToCSV(state.hits, stops),
+      (isTsv ? 'text/tab-separated-values' : 'text/csv') + ';charset=utf-8'
     );
   }
 
@@ -1400,7 +1609,10 @@
     var bed9 = $('bed9-toggle') && $('bed9-toggle').checked;
     global.CodonReport.triggerDownload(
       baseFilename() + (bed9 ? '.stop_codons.bed9.bed' : '.stop_codons.bed'),
-      global.CodonExport.toBED(state.hits, { bed9: bed9, stops: activeStops() }),
+      global.CodonExport.toBED(state.hits, {
+        bed9: bed9, stops: activeStops(),
+        palette: (global.CodonPalettes && global.CodonPalettes.bedPalette(state.colorScheme)) || null
+      }),
       'text/plain;charset=utf-8'
     );
   }
@@ -1506,6 +1718,19 @@
     var b = $('download-bed-btn'); if (b) b.addEventListener('click', onDownloadBed);
     var fna = $('download-fna-btn'); if (fna) fna.addEventListener('click', onDownloadFna);
     var faa = $('download-faa-btn'); if (faa) faa.addEventListener('click', onDownloadFaa);
+
+    // New results-table formats + clipboard + printable HTML report.
+    var tsv = $('download-tsv-btn'); if (tsv) tsv.addEventListener('click', onDownloadTsv);
+    var md = $('download-md-btn'); if (md) md.addEventListener('click', onDownloadMarkdown);
+    var html = $('download-html-btn'); if (html) html.addEventListener('click', onDownloadHtmlReport);
+    var cpT = $('copy-tsv-btn'); if (cpT) cpT.addEventListener('click', onCopyTsv);
+    var cpM = $('copy-md-btn'); if (cpM) cpM.addEventListener('click', onCopyMarkdown);
+
+    // Per-gene summary + per-frame breakdown card downloads (CSV + TSV each).
+    var gc = $('gene-csv-btn'); if (gc) gc.addEventListener('click', function () { onDownloadGeneSummary('csv'); });
+    var gt = $('gene-tsv-btn'); if (gt) gt.addEventListener('click', function () { onDownloadGeneSummary('tsv'); });
+    var fc = $('frame-csv-btn'); if (fc) fc.addEventListener('click', function () { onDownloadFrameBreakdown('csv'); });
+    var ft = $('frame-tsv-btn'); if (ft) ft.addEventListener('click', function () { onDownloadFrameBreakdown('tsv'); });
 
     var sel = $('viz-record-select');
     if (sel) sel.addEventListener('change', function () { state.vizRecordId = this.value; renderViz(); });
@@ -1751,24 +1976,28 @@
     if ($('filter-context')) $('filter-context').addEventListener('change', renderResultsTable);
   }
 
-  // The inline "?" help icons show their explanation only via a CSS ::after
-  // data-tip tooltip, which is invisible to assistive tech. Fold that text into
-  // each icon's accessible name so a screen reader announces the full
-  // explanation (not just the short "... help" label). Done in JS so the tip
-  // string lives in exactly one place (data-tip); if JS is off the short
-  // aria-label in the HTML still applies.
+  // Any element carrying a data-tip (the inline "?" help icons and the .sci-note
+  // lore footnotes) shows its explanation only via a CSS ::after tooltip, which
+  // is invisible to assistive tech. Fold that text into each element's
+  // accessible name so a screen reader announces the full explanation. For the
+  // "?" icons an aria-label already exists in the HTML and is prepended; for
+  // sci-note words there is none, so the visible word becomes the base. Done in
+  // JS so the tip string lives in exactly one place (data-tip); if JS is off,
+  // any aria-label authored in the HTML still applies.
   function exposeHelpTips() {
-    var icons = document.querySelectorAll('.help[data-tip]');
-    for (var i = 0; i < icons.length; i++) {
-      var tip = icons[i].getAttribute('data-tip');
+    var els = document.querySelectorAll('[data-tip]');
+    for (var i = 0; i < els.length; i++) {
+      var tip = els[i].getAttribute('data-tip');
       if (!tip) continue;
-      var label = icons[i].getAttribute('aria-label');
-      icons[i].setAttribute('aria-label', label ? label + ': ' + tip : tip);
+      var label = els[i].getAttribute('aria-label');
+      if (!label) label = (els[i].textContent || '').trim();
+      els[i].setAttribute('aria-label', label ? label + ': ' + tip : tip);
     }
   }
 
   function init() {
     initTheme();
+    initColorScheme();
     exposeHelpTips();
     wireProgress();
     setupDropzone();
@@ -1801,6 +2030,56 @@
       try { citeDate.textContent = new Date().toISOString().slice(0, 10); }
       catch (e) { citeDate.textContent = ''; }
     }
+
+    initDecor();
+  }
+
+  // ====================================================================
+  // Decorative polish layer (additive; reduced-motion + tab-visibility safe)
+  // ====================================================================
+  function initDecor() {
+    // Tab-visibility pause: toggles the attribute the CSS kill-switch reads.
+    function syncPaused() {
+      document.documentElement.toggleAttribute('data-scf-paused', document.hidden);
+    }
+    document.addEventListener('visibilitychange', syncPaused);
+    syncPaused();
+
+    // Rotating footer fact (static first fact under reduced-motion; pauses when
+    // the tab is hidden).
+    (function () {
+      var facts = [
+        'UUU = phenylalanine was the first codon ever deciphered — Nirenberg & Matthaei, 1961.',
+        'Only 3 of the 64 codons are stops: UAG, UAA, UGA.',
+        '“Amber,” “ochre,” and “opal” are lab nicknames for the three stop codons.',
+        'UGA can mean “stop” — or selenocysteine, the 21st amino acid.',
+        'Nirenberg, Khorana, and Holley won the 1968 Nobel for cracking the code.',
+        'Scientists have built bacteria that run on just 61 codons (Syn61, 2019).'
+      ];
+      var el = $('scf-fact');
+      if (!el) return;
+      el.textContent = facts[0];
+      var reduce = global.matchMedia && global.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (reduce) return;
+      var i = 0;
+      setInterval(function () {
+        if (document.hidden) return;
+        el.style.opacity = '0';
+        setTimeout(function () {
+          i = (i + 1) % facts.length;
+          el.textContent = facts[i];
+          el.style.opacity = '1';
+        }, 500);
+      }, 7000);
+    })();
+
+    // Easter egg: a one-shot "base-pair pop" when the hero helix is clicked.
+    var helix = $('scf-helix');
+    if (helix) helix.addEventListener('click', function () {
+      helix.classList.remove('scf-pop');
+      void helix.offsetWidth;   // reflow so the animation restarts
+      helix.classList.add('scf-pop');
+    });
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

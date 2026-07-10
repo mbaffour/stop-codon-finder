@@ -92,15 +92,25 @@
   }
 
   // ---- BED -------------------------------------------------------------
-  // Colorblind-safe itemRgb palette, indexed by the codon's position in the
-  // active stop list (mirrors the --codon-N CSS palette). Concrete RGB (BED is
-  // plain text, no CSS vars).
-  var BED_PALETTE = ['184,134,11', '224,138,0', '15,158,143', '91,108,196', '181,70,139', '108,122,137'];
+  // itemRgb palette, indexed by the codon's position in the active stop list
+  // (mirrors the --codon-N CSS palette). Concrete RGB (BED is plain text, no CSS
+  // vars). Defaults to the active colour scheme's chart fills when available
+  // (CodonPalettes.bedPalette), else the colour-blind-safe fallback below. A
+  // caller may override via options.palette (array of 'r,g,b' strings).
+  var BED_PALETTE = ['230,159,0', '86,180,233', '0,158,115', '213,94,0', '0,114,178', '204,121,167'];
 
-  function codonRgb(codon, stops) {
+  function activeBedPalette() {
+    if (global.CodonPalettes && global.CodonPalettes.bedPalette) {
+      try { return global.CodonPalettes.bedPalette(); } catch (e) {}
+    }
+    return BED_PALETTE;
+  }
+
+  function codonRgb(codon, stops, palette) {
+    palette = palette || BED_PALETTE;
     var idx = stops ? stops.indexOf(codon) : -1;
     if (idx < 0) idx = 5; else idx = idx % 6;
-    return BED_PALETTE[idx];
+    return palette[idx % palette.length];
   }
 
   /**
@@ -116,6 +126,7 @@
     hits = hits || [];
     var bed9 = !!options.bed9;
     var stops = options.stops || [];
+    var palette = (options.palette && options.palette.length) ? options.palette : activeBedPalette();
     var coords = (global.CodonScanner && global.CodonScanner.coords) || {
       toBed: function (h) { return h.end < h.start ? null : { chromStart: h.start - 1, chromEnd: h.end }; }
     };
@@ -129,7 +140,7 @@
       if (!b) { wrapped++; continue; }
       var name = (h.id != null && h.id !== '') ? h.id : (h.codon + '_' + (h.strand === '-' ? 'minus' : 'plus'));
       var row = [h.seqId, b.chromStart, b.chromEnd, name, 0, h.strand];
-      if (bed9) row.push(b.chromStart, b.chromEnd, codonRgb(h.codon, stops));
+      if (bed9) row.push(b.chromStart, b.chromEnd, codonRgb(h.codon, stops, palette));
       lines.push(row.join('\t'));
     }
     if (wrapped) lines.push('# ' + wrapped + ' origin-wrapping stop codon(s) omitted.');

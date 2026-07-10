@@ -19,19 +19,47 @@
 
   <header class="app-header">
     <div class="brand">
-      <div class="brand-mark" aria-hidden="true">DNA</div>
+      <div class="brand-mark scf-anim" id="scf-helix" aria-hidden="true">
+        <svg viewBox="0 0 44 44" class="scf-helix-mark" role="img">
+          <defs>
+            <linearGradient id="scfGem" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0"   stop-color="var(--gem-ochre-hi)"/>
+              <stop offset=".5"  stop-color="var(--gem-amber)"/>
+              <stop offset="1"   stop-color="var(--gem-opal)"/>
+            </linearGradient>
+          </defs>
+          <rect x="0" y="0" width="44" height="44" rx="10" fill="url(#scfGem)"/>
+          <g class="scf-helix-spin" stroke="rgba(255,255,255,.9)" stroke-width="2.2" stroke-linecap="round">
+            <path d="M13 8 C 27 15, 17 29, 31 36" fill="none" opacity=".85"/>
+            <path d="M31 8 C 17 15, 27 29, 13 36" fill="none" opacity=".85"/>
+            <line x1="15" y1="12" x2="29" y2="12"/>
+            <line x1="18" y1="18" x2="26" y2="18"/>
+            <line x1="18" y1="26" x2="26" y2="26"/>
+            <line x1="15" y1="32" x2="29" y2="32"/>
+          </g>
+        </svg>
+      </div>
       <div>
         <h1>Stop Codon Finder</h1>
-        <p>Six-frame &amp; annotation-aware stop-codon scanning for FASTA, GFF3 &amp; GenBank &mdash; 100% in your browser</p>
+        <p>Six-frame &amp; annotation-aware stop-codon scanning &mdash; <em>ochre</em>, <em>amber</em> &amp; <em>opal</em>, found locally in your browser.</p>
       </div>
     </div>
     <div class="header-actions">
       <a class="btn btn-ghost btn-sm" href="README.md" target="_blank" rel="noopener">Help / README</a>
+      <div class="scheme-field">
+        <label for="scheme-select" class="scheme-label">
+          <span class="scheme-icon" aria-hidden="true">&#127912;</span>
+          <span class="visually-hidden">Codon colour scheme</span>
+        </label>
+        <select id="scheme-select" class="scheme-select" title="Codon colour scheme" aria-label="Codon colour scheme"></select>
+      </div>
       <button id="theme-toggle" class="icon-toggle" type="button" aria-pressed="false" aria-label="Toggle dark mode">
         <span id="theme-toggle-icon" aria-hidden="true">&#127769;</span>
       </button>
     </div>
   </header>
+
+  <div class="scf-codon-rule scf-anim" aria-hidden="true"></div>
 
   <main>
 
@@ -239,6 +267,11 @@
           </div>
         </div>
         <div class="legend" id="frame-legend"></div>
+        <div class="card-dl" role="group" aria-label="Download per-frame breakdown">
+          <span class="card-dl-label">Download table:</span>
+          <button id="frame-csv-btn" class="btn btn-sm" type="button" title="Per-frame counts as CSV">CSV</button>
+          <button id="frame-tsv-btn" class="btn btn-sm" type="button" title="Per-frame counts as TSV">TSV</button>
+        </div>
       </section>
 
       <section class="card" id="viz-card" aria-labelledby="viz-heading">
@@ -296,6 +329,11 @@
           </table>
         </div>
         <p id="genesummary-note" class="table-note"></p>
+        <div class="card-dl" role="group" aria-label="Download per-gene summary">
+          <span class="card-dl-label">Download table:</span>
+          <button id="gene-csv-btn" class="btn btn-sm" type="button" title="Per-gene summary as CSV">CSV</button>
+          <button id="gene-tsv-btn" class="btn btn-sm" type="button" title="Per-gene summary as TSV">TSV</button>
+        </div>
       </section>
 
       <section class="card" id="table-card" aria-labelledby="table-heading">
@@ -346,15 +384,21 @@
           <div class="spacer"></div>
           <div class="download-row">
             <button id="download-csv-btn" class="btn" type="button">CSV</button>
+            <button id="download-tsv-btn" class="btn" type="button" title="Tab-separated values (pastes cleanly into Excel / Google Sheets)">TSV</button>
             <button id="download-json-btn" class="btn" type="button">JSON</button>
+            <button id="download-md-btn" class="btn" type="button" title="GitHub-flavoured Markdown table">Markdown</button>
+            <button id="download-html-btn" class="btn btn-primary" type="button" title="Self-contained, printable HTML report: summary + tables + chart in one offline file">Report (HTML)</button>
             <button id="download-gff3-btn" class="btn" type="button" title="GFF3 (1-based inclusive; phase column 0, reading frame in a frame= attribute)">GFF3</button>
             <button id="download-bed-btn" class="btn" type="button" title="BED (0-based half-open; chromStart = start − 1)">BED</button>
             <label class="check bed9-check"><input type="checkbox" id="bed9-toggle"> color by codon (BED9)</label>
             <button id="download-fna-btn" class="btn" type="button" hidden title="Nucleotide FASTA of predicted ORFs / CDS">ORFs .fna</button>
             <button id="download-faa-btn" class="btn" type="button" hidden title="Translated protein FASTA (uses the selected genetic code)">Proteins .faa</button>
+            <span class="dl-sep" aria-hidden="true"></span>
+            <button id="copy-tsv-btn" class="btn btn-ghost btn-sm" type="button" title="Copy the full results table as TSV for pasting into a spreadsheet">Copy TSV</button>
+            <button id="copy-md-btn" class="btn btn-ghost btn-sm" type="button" title="Copy the full results table as a Markdown table">Copy Markdown</button>
           </div>
         </div>
-        <p id="export-note" class="table-note">Downloads include every hit (filters affect the table only). Coordinates: CSV / JSON / GFF3 are <strong>1-based, inclusive</strong>; BED is <strong>0-based, half-open</strong> (chromStart = start&nbsp;&minus;&nbsp;1). Each hit keeps one stable ID across all formats.</p>
+        <p id="export-note" class="table-note">Downloads include every hit (filters affect the table only). Coordinates: CSV / TSV / JSON / GFF3 / Markdown are <strong>1-based, inclusive</strong>; BED is <strong>0-based, half-open</strong> (chromStart = start&nbsp;&minus;&nbsp;1). Each hit keeps one stable ID across all formats. The HTML report bundles the summary, both tables and the key chart into one offline file.</p>
 
         <div id="codon-legend" class="legend codon-legend" role="list" aria-label="Stop codon colour key"></div>
 
@@ -381,6 +425,7 @@
         <a href="#learn-coords">Coordinates</a>
         <a href="#learn-context">Context classes</a>
         <a href="#learn-glossary">Glossary</a>
+        <a href="#learn-history">History &amp; frontiers</a>
         <a href="#learn-methods">Methods &amp; citing</a>
       </nav>
 
@@ -389,9 +434,12 @@
         <div class="disclosure-body">
           <p>A <strong>stop codon</strong> is a three-base codon that signals the ribosome to end translation instead of adding an amino acid. In the standard genetic code there are three:</p>
           <ul>
-            <li><code>TAA</code> &mdash; historically named <strong>ochre</strong></li>
-            <li><code>TAG</code> &mdash; <strong>amber</strong></li>
-            <li><code>TGA</code> &mdash; <strong>opal</strong> (also &ldquo;umber&rdquo;)</li>
+            <li><code>TAA</code> &mdash; historically named
+              <strong class="sci-note" tabindex="0" data-tip="The UAA stop codon; named after 'amber' to extend the colour-mineral theme. A lab in-joke, not chemistry.">ochre</strong></li>
+            <li><code>TAG</code> &mdash;
+              <strong class="sci-note" tabindex="0" data-tip="Nickname for the UAG stop codon: a pun on Caltech student Harris Bernstein, whose surname means 'amber' in German. Isolated by Epstein & Steinberg.">amber</strong></li>
+            <li><code>TGA</code> &mdash;
+              <strong class="sci-note" tabindex="0" data-tip="The UGA stop codon; the third 'colour' name, after amber and ochre.">opal</strong> (also &ldquo;umber&rdquo;)</li>
           </ul>
           <p>(DNA is shown with <code>T</code>; in mRNA these are <code>UAA</code>, <code>UAG</code>, <code>UGA</code>.) The classic ochre/amber/opal names apply <em>only</em> to these three &mdash; other stop codons in non-standard codes have no such name and are simply labelled &ldquo;stop&rdquo; here.</p>
           <p><strong>The stop set is not universal.</strong> Which codons stop depends on the organism's genetic code (see below). For example ciliates read <code>TAA</code>/<code>TAG</code> as glutamine (leaving <code>TGA</code> as the only stop), vertebrate mitochondria add <code>AGA</code>/<code>AGG</code> as stops, and some organisms use unusual stops such as <code>TCA</code> or <code>TTA</code>. This tool always derives the stop set from the selected NCBI table, never from a hard-coded TAA/TAG/TGA assumption.</p>
@@ -498,11 +546,60 @@
             <dt>Terminator</dt><dd>The stop codon that ends a CDS or ORF.</dd>
             <dt>Premature / internal stop</dt><dd>An in-frame stop before the annotated end of a CDS.</dd>
             <dt>Readthrough</dt><dd>Translation continuing past a stop codon, recoding it to an amino acid.</dd>
-            <dt>Selenocysteine (Sec) / Pyrrolysine (Pyl)</dt><dd>Amino acids inserted at recoded <code>TGA</code>/<code>TAG</code> codons, directed by context elements &mdash; not deducible from sequence alone.</dd>
+            <dt><span class="sci-note" tabindex="0" data-tip="The 21st amino acid: slipped in at a recoded TGA 'stop' via a special mRNA context signal. A stop that isn't.">Selenocysteine (Sec)</span> / <span class="sci-note" tabindex="0" data-tip="The 22nd amino acid: encoded by a recoded TAG 'stop' in certain microbes.">Pyrrolysine (Pyl)</span></dt><dd>Amino acids inserted at recoded <code>TGA</code>/<code>TAG</code> codons, directed by context elements &mdash; not deducible from sequence alone.</dd>
             <dt>Pseudogene</dt><dd>A gene-like sequence disrupted by mutations such as premature stops or frameshifts.</dd>
             <dt>GC content</dt><dd>The percentage of bases that are G or C.</dd>
             <dt>Ochre / amber / opal</dt><dd>Historical names for <code>TAA</code> / <code>TAG</code> / <code>TGA</code>.</dd>
             <dt>IUPAC ambiguity code</dt><dd>A letter standing for several possible bases (e.g. <code>R</code> = A or G, <code>N</code> = any).</dd>
+          </dl>
+        </div>
+      </details>
+
+      <details class="disclosure" id="learn-history">
+        <summary>History &amp; frontiers of the genetic code <span class="summary-tag">lore</span></summary>
+        <div class="disclosure-body">
+          <p>How three little codons got jewel names &mdash; and where the science is still moving.</p>
+          <dl class="glossary">
+            <dt>A code cracked in 1961</dt>
+            <dd>Marshall Nirenberg and Heinrich Matthaei fed a synthetic RNA of pure uracil
+              (poly&#8209;U) into a cell&#8209;free extract and got a protein of pure phenylalanine &mdash;
+              proving <code>UUU</code>&nbsp;=&nbsp;Phe and cracking the first &ldquo;word&rdquo; of the genetic code.</dd>
+            <dt>The dictionary, spelled out (1966&ndash;68)</dt>
+            <dd>By 1966 all 64 codons were assigned. Nirenberg, Har Gobind Khorana and Robert
+              Holley shared the 1968 Nobel Prize in Physiology or Medicine for deciphering the
+              code and its role in protein synthesis.</dd>
+            <dt>Three codons that say nothing</dt>
+            <dd>Francis Crick and Sydney Brenner established that the code is read in
+              non&#8209;overlapping triplets, and that three of them &mdash; <code>UAG</code>,
+              <code>UAA</code>, <code>UGA</code> &mdash; code for no amino acid. These
+              &ldquo;nonsense&rdquo; codons are the ribosome's full stops.</dd>
+            <dt>Why &ldquo;amber&rdquo;?</dt>
+            <dd>The stop codon <code>UAG</code> is nicknamed <strong>amber</strong> after Caltech
+              grad student Harris <strong>Bernstein</strong> &mdash; <em>Bernstein</em> is German
+              for amber &mdash; whose name Richard Epstein and Charles Steinberg immortalised when
+              they isolated the mutants. <strong>ochre</strong> (<code>UAA</code>) and
+              <strong>opal</strong> (<code>UGA</code>) were named later just to keep the colour
+              theme going. The names are lab in&#8209;jokes, not chemistry.</dd>
+            <dt>The code is &ldquo;universal&rdquo; &mdash; mostly</dt>
+            <dd>NCBI catalogues 30+ translation tables. Ciliates read <code>TAA</code>/<code>TAG</code>
+              as glutamine; many mitochondria read <code>TGA</code> as tryptophan. This tool derives
+              its stop set from the table you pick, never a hard&#8209;coded <code>TAA/TAG/TGA</code>.</dd>
+            <dt>The 21st &amp; 22nd amino acids</dt>
+            <dd>Cells can override a stop. <strong>Selenocysteine</strong> is inserted at a recoded
+              <code>UGA</code>; <strong>pyrrolysine</strong> at a recoded <code>UAG</code>. Both rely
+              on special mRNA signals and dedicated tRNAs &mdash; a stop that isn't, undetectable from
+              sequence alone.</dd>
+            <dt>Frontier: reading past a false stop</dt>
+            <dd>When a nonsense mutation creates a premature stop, disease can follow (some cystic
+              fibrosis and Duchenne muscular dystrophy cases). Readthrough approaches such as
+              ataluren (formerly PTC124) and engineered suppressor tRNAs aim to coax the ribosome
+              past the false stop &mdash; a representative strategy whose clinical efficacy remains
+              debated, not a settled cure.</dd>
+            <dt>Frontier: freeing up a codon</dt>
+            <dd>In 2019 Jason Chin's group at the MRC LMB built <em>Syn61</em>, an <em>E. coli</em>
+              with a chemically synthesised, recoded genome using only 61 codons. A 2021 successor,
+              <em>Syn61&Delta;3</em>, gave up a codon entirely &mdash; becoming virus&#8209;resistant
+              and opening a slot to encode new, non&#8209;natural amino acids.</dd>
           </dl>
         </div>
       </details>
@@ -537,7 +634,11 @@
 
   </main>
 
-  <footer>
+  <footer class="scf-footer">
+    <div class="scf-gems" aria-hidden="true">
+      <span class="scf-gem g1">TAA</span><span class="scf-gem g2">TAG</span><span class="scf-gem g3">TGA</span>
+    </div>
+    <p class="scf-fact" id="scf-fact" aria-live="off">The genetic code was fully deciphered by 1966.</p>
     <p>Everything runs locally in your browser &mdash; your sequence data is never uploaded or transmitted anywhere. See the <a href="README.md" target="_blank" rel="noopener">README</a> for biology &amp; coordinate conventions.</p>
   </footer>
 
@@ -553,6 +654,7 @@
 <script src="js/scanner.js"></script>
 <script src="js/annotate.js"></script>
 <script src="js/orf.js"></script>
+<script src="js/palettes.js"></script>
 <script src="js/report.js"></script>
 <script src="js/export.js"></script>
 <script src="js/viz.js"></script>

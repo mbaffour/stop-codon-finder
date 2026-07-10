@@ -130,49 +130,177 @@
     return rows;
   }
 
+  // ---- Coordinate convention (single source of truth) ------------------
+  // Every tabular / text export states coordinates the SAME way so a CSV row, a
+  // TSV row, a Markdown cell, a GFF3 ID and an HTML-report row can never drift.
+  // BED is the ONLY 0-based, half-open format (that shift is owned in export.js
+  // via CodonScanner.coords.toBed); everything here is 1-based inclusive.
+  var COORD_NOTE = 'Coordinates are 1-based, inclusive (start and end both count). ' +
+    'BED exports are the only 0-based, half-open format (chromStart = start − 1). ' +
+    'Each hit keeps one stable ID (stop_0001, …) across every format.';
+
+  // ---- Shared field escaping -------------------------------------------
   function csvEscape(value) {
-    var s = String(value);
+    var s = String(value == null ? '' : value);
     if (/[",\n\r]/.test(s)) {
       s = '"' + s.replace(/"/g, '""') + '"';
     }
     return s;
   }
+  // TSV has no portable quoting convention; the safe, lossless-enough rule used
+  // by Excel/Sheets paste is to collapse embedded TAB/CR/LF in a cell to spaces
+  // so column alignment can never break.
+  function tsvEscape(value) {
+    return String(value == null ? '' : value).replace(/[\t\r\n]+/g, ' ');
+  }
+  // GitHub-flavoured Markdown table cell: escape the pipe and flatten newlines.
+  function mdEscape(value) {
+    return String(value == null ? '' : value).replace(/\|/g, '\\|').replace(/[\r\n]+/g, ' ');
+  }
+  // Minimal HTML text escaping for the self-contained report.
+  function htmlEscape(value) {
+    return String(value == null ? '' : value)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function signedFrame(h) { return (h.strand === '-' ? '-' : '+') + h.frame; }
+
+  // ---- Canonical results columns (shared by CSV / TSV / Markdown) -------
+  // ONE definition of the results columns + per-hit cell values, so the tabular
+  // formats stay identical in column set, order, and hit-id threading. `strand`
+  // and `frame` stay separate columns (matching the long-standing CSV); the
+  // frame value is the unsigned reading frame (1/2/3) as in the CSV.
+  function resultsHeader(includeAnnotation) {
+    var cols = ['stop_id', 'seq_id', 'start', 'end', 'strand', 'frame', 'codon', 'name'];
+    if (includeAnnotation) cols = cols.concat(['gene', 'locus_tag', 'product', 'context', 'recoding_candidate']);
+    return cols;
+  }
+  function resultsCells(h, includeAnnotation) {
+    var cells = [
+      h.id == null ? '' : h.id,
+      h.seqId, h.start, h.end, h.strand, h.frame, h.codon, h.name
+    ];
+    if (includeAnnotation) {
+      cells.push(h.geneName == null ? '' : h.geneName);
+      cells.push(h.locusTag == null ? '' : h.locusTag);
+      cells.push(h.product == null ? '' : h.product);
+      cells.push(h.context == null ? '' : h.context);
+      cells.push(h.recodingCandidate ? 'yes' : '');
+    }
+    return cells;
+  }
+
+  // Generic delimited-text writer over a header + rows-of-arrays, escaping each
+  // cell per the chosen delimiter's rules.
+  function delimited(header, rows, delim, escFn, lineSep) {
+    var out = [header.map(escFn).join(delim)];
+    for (var i = 0; i < rows.length; i++) out.push(rows[i].map(escFn).join(delim));
+    return out.join(lineSep);
+  }
 
   /**
-   * hits -> CSV text.
-   * Default header (7 columns, unchanged): seq_id,start,end,strand,frame,codon,name
-   * With options.includeAnnotation, append: gene,locus_tag,product,context
+   * hits -> CSV text (RFC-4180-ish, CRLF line endings).
+   * Header (8 cols): stop_id,seq_id,start,end,strand,frame,codon,name
+   * With options.includeAnnotation, append: gene,locus_tag,product,context,recoding_candidate
    */
   function toCSV(hits, options) {
     options = options || {};
-    var includeAnnotation = !!options.includeAnnotation;
-    // stop_id is the stable per-hit id (stop_0001, ...) so rows in the CSV, the
-    // JSON, and a future BED/GFF3 export all reference the same hit.
-    var header = 'stop_id,seq_id,start,end,strand,frame,codon,name';
-    if (includeAnnotation) header += ',gene,locus_tag,product,context,recoding_candidate';
-    var rows = [header];
+    var ann = !!options.includeAnnotation;
+    hits = hits || [];
+    var rows = hits.map(function (h) { return resultsCells(h, ann); });
+    return delimited(resultsHeader(ann), rows, ',', csvEscape, '\r\n');
+  }
+
+  /** hits -> TSV text. Same columns/threading as toCSV; tab-separated, LF lines
+   *  (what Excel / Google Sheets expect from a clipboard/file paste). */
+  function toTSV(hits, options) {
+    options = options || {};
+    var ann = !!options.includeAnnotation;
+    hits = hits || [];
+    var rows = hits.map(function (h) { return resultsCells(h, ann); });
+    return delimited(resultsHeader(ann), rows, '\t', tsvEscape, '\n') + '\n';
+  }
+
+  /** hits -> GitHub-flavoured Markdown table. Same columns/threading as toCSV. */
+  function toMarkdown(hits, options) {
+    options = options || {};
+    var ann = !!options.includeAnnotation;
+    hits = hits || [];
+    var header = resultsHeader(ann);
+    var lines = ['| ' + header.map(mdEscape).join(' | ') + ' |'];
+    lines.push('| ' + header.map(function () { return '---'; }).join(' | ') + ' |');
+    for (var i = 0; i < hits.length; i++) {
+      lines.push('| ' + resultsCells(hits[i], ann).map(mdEscape).join(' | ') + ' |');
+    }
+    return lines.join('\n') + '\n';
+  }
+
+  // ---- Per-gene summary as tabular text --------------------------------
+  function geneSummaryHeader() {
+    return ['gene', 'locus_tag', 'product', 'length_bp', 'internal_stops',
+      'terminator_codon', 'strand', 'pseudogene_flag', 'feature_id'];
+  }
+  function geneSummaryCells(r) {
+    return [
+      r.gene == null ? '' : r.gene,
+      r.locusTag == null ? '' : r.locusTag,
+      r.product == null ? '' : r.product,
+      r.length,
+      r.internalStops,
+      r.terminatorCodon == null ? '' : r.terminatorCodon,
+      r.strand == null ? '' : r.strand,
+      r.pseudogeneFlag ? 'yes' : '',
+      r.featureId == null ? '' : r.featureId
+    ];
+  }
+  function geneSummaryToCSV(geneSummary) {
+    var rows = (geneSummary || []).map(geneSummaryCells);
+    return delimited(geneSummaryHeader(), rows, ',', csvEscape, '\r\n');
+  }
+  function geneSummaryToTSV(geneSummary) {
+    var rows = (geneSummary || []).map(geneSummaryCells);
+    return delimited(geneSummaryHeader(), rows, '\t', tsvEscape, '\n') + '\n';
+  }
+
+  // ---- Per-frame breakdown ---------------------------------------------
+  // Tally counts per (signed frame x codon), seeded by the active stop list so
+  // every stop of the current genetic code appears even at zero. Pure (no DOM),
+  // so app.js and Node self-tests share one definition.
+  function buildFrameBreakdown(hits, stops) {
+    hits = hits || [];
+    stops = stops || [];
+    var table = {};
+    FRAME_ORDER.forEach(function (k) {
+      table[k] = { total: 0 };
+      stops.forEach(function (c) { table[k][c] = 0; });
+    });
     for (var i = 0; i < hits.length; i++) {
       var h = hits[i];
-      var cells = [
-        csvEscape(h.id == null ? '' : h.id),
-        csvEscape(h.seqId),
-        h.start,
-        h.end,
-        h.strand,
-        h.frame,
-        h.codon,
-        h.name
-      ];
-      if (includeAnnotation) {
-        cells.push(csvEscape(h.geneName == null ? '' : h.geneName));
-        cells.push(csvEscape(h.locusTag == null ? '' : h.locusTag));
-        cells.push(csvEscape(h.product == null ? '' : h.product));
-        cells.push(csvEscape(h.context == null ? '' : h.context));
-        cells.push(h.recodingCandidate ? 'yes' : '');
-      }
-      rows.push(cells.join(','));
+      var key = (h.strand === '-' ? '-' : '+') + h.frame;
+      if (!table[key]) continue;
+      if (table[key][h.codon] !== undefined) table[key][h.codon]++;
+      table[key].total++;
     }
-    return rows.join('\r\n');
+    return table;
+  }
+  function frameBreakdownHeader(stops) {
+    return ['frame'].concat(stops || []).concat(['total']);
+  }
+  function frameBreakdownRows(table, stops) {
+    stops = stops || [];
+    return FRAME_ORDER.map(function (key) {
+      var d = table[key] || { total: 0 };
+      return [key].concat(stops.map(function (c) { return d[c] || 0; })).concat([d.total]);
+    });
+  }
+  function frameBreakdownToCSV(hits, stops) {
+    var table = buildFrameBreakdown(hits, stops);
+    return delimited(frameBreakdownHeader(stops), frameBreakdownRows(table, stops), ',', csvEscape, '\r\n');
+  }
+  function frameBreakdownToTSV(hits, stops) {
+    var table = buildFrameBreakdown(hits, stops);
+    return delimited(frameBreakdownHeader(stops), frameBreakdownRows(table, stops), '\t', tsvEscape, '\n') + '\n';
   }
 
   /**
@@ -221,9 +349,225 @@
     };
   }
 
-  /** summary + full hits array -> pretty-printed JSON text */
-  function toJSON(summary, hits) {
-    return JSON.stringify({ summary: summary, hits: hits }, null, 2);
+  /**
+   * summary + full hits array -> pretty-printed JSON text.
+   * `extras` (optional) folds the other tables into the same document so a single
+   * JSON download carries the results, the per-gene summary, and the per-frame
+   * breakdown: { geneSummary, stops } -> adds `geneSummary` and `frameBreakdown`.
+   */
+  function toJSON(summary, hits, extras) {
+    var doc = { summary: summary, hits: hits };
+    if (extras) {
+      if (extras.geneSummary) doc.geneSummary = extras.geneSummary;
+      if (extras.stops) {
+        doc.frameBreakdown = buildFrameBreakdown(hits, extras.stops);
+        doc.frameBreakdown.frameOrder = FRAME_ORDER.slice();
+        doc.frameBreakdown.stops = extras.stops.slice();
+      }
+    }
+    return JSON.stringify(doc, null, 2);
+  }
+
+  // ---- Self-contained, printable HTML report ("report sheet") ----------
+  // Builds a COMPLETE standalone .html document (own <!doctype>, <style>) with no
+  // external references, so it opens offline from a download. Embeds the summary
+  // stats, the per-frame breakdown, the per-gene summary, a capped copy of the
+  // results table, and a static inline SVG of the key chart + colour legend.
+  // Pure string building (no DOM) so it is Node-testable. All colours are baked
+  // in as concrete values (data.colors.codonFills / codonInks, light-theme AA-on-
+  // white ramps) — the report is deliberately a light, print-friendly sheet.
+  function toHTMLReport(data) {
+    data = data || {};
+    var s = data.summary || {};
+    var hits = data.hits || [];
+    var stops = data.stops || [];
+    var stopNames = data.stopNames || {};
+    var geneSummary = data.geneSummary || [];
+    var ann = !!data.includeAnnotation;
+    var maxRows = data.maxRows || 2000;
+    var fills = (data.colors && data.colors.codonFills) || ['#e69f00', '#56b4e9', '#009e73', '#d55e00', '#0072b2', '#cc79a7'];
+    var inks = (data.colors && data.colors.codonInks) || fills;
+    var title = data.title || 'Stop Codon Finder report';
+    var generatedAt = data.generatedAt || (s.generatedAt || new Date().toISOString());
+
+    function fmtInt(n) { try { return Number(n).toLocaleString('en-US'); } catch (e) { return String(n); } }
+    function codonColor(codon, ramp) {
+      var i = stops.indexOf(codon);
+      return (i >= 0) ? ramp[i % 6] : ramp[5];
+    }
+
+    // --- summary stat cards ---
+    var cards = [];
+    cards.push({ label: 'Sequences', value: fmtInt(s.sequenceCount || 0) });
+    cards.push({ label: 'Total length', value: fmtInt(s.totalLength || 0) + ' bp' });
+    cards.push({ label: 'GC content', value: (s.gcPercent || 0).toFixed(1) + '%' });
+    cards.push({ label: 'Total stop codons', value: fmtInt(s.totalStops || 0), hero: true });
+    stops.forEach(function (codon) {
+      var name = stopNames[codon] || 'stop';
+      cards.push({
+        label: codon + (name !== 'stop' ? ' (' + name + ')' : ''),
+        value: fmtInt((s.byCodon && s.byCodon[codon]) || 0),
+        swatch: codonColor(codon, fills)
+      });
+    });
+    cards.push({ label: 'Forward strand (+)', value: fmtInt((s.byStrand && s.byStrand['+']) || 0) });
+    cards.push({ label: 'Reverse strand (−)', value: fmtInt((s.byStrand && s.byStrand['-']) || 0) });
+    cards.push({ label: 'Density', value: (s.densityPerKb || 0).toFixed(2) + ' /kb', sub: 'stops per 1,000 bp' });
+
+    var cardHtml = cards.map(function (c) {
+      return '<div class="card' + (c.hero ? ' hero' : '') + '">' +
+        '<div class="lbl">' + (c.swatch ? '<span class="sw" style="background:' + c.swatch + '"></span>' : '') + htmlEscape(c.label) + '</div>' +
+        '<div class="val">' + htmlEscape(c.value) + '</div>' +
+        (c.sub ? '<div class="sub">' + htmlEscape(c.sub) + '</div>' : '') +
+        '</div>';
+    }).join('');
+
+    // --- chart + legend ---
+    var chartHtml = '';
+    if (data.chartSVG) {
+      var legendHtml = stops.map(function (codon) {
+        var name = stopNames[codon] || 'stop';
+        return '<span class="leg"><span class="sw" style="background:' + codonColor(codon, fills) + '"></span>' +
+          htmlEscape(codon) + (name !== 'stop' ? ' (' + htmlEscape(name) + ')' : '') + '</span>';
+      }).join('');
+      chartHtml = '<section><h2>Per-frame breakdown</h2>' +
+        '<div class="chart">' + data.chartSVG + '</div>' +
+        '<div class="legend">' + legendHtml + '</div></section>';
+    }
+
+    // --- per-frame table ---
+    var fbTable = buildFrameBreakdown(hits, stops);
+    var fbHead = frameBreakdownHeader(stops);
+    var fbRows = frameBreakdownRows(fbTable, stops);
+    var frameTableHtml = '<section><h2>Counts per frame</h2>' +
+      renderHtmlTable(fbHead, fbRows, null) + '</section>';
+
+    // --- per-gene summary ---
+    var geneHtml = '';
+    if (geneSummary.length) {
+      var gHead = ['Gene', 'Locus tag', 'Product', 'Length (bp)', 'Internal stops', 'Terminator', 'Strand'];
+      var gRows = geneSummary.map(function (r) {
+        return [
+          r.gene || r.locusTag || r.featureId || '—',
+          r.locusTag || '—',
+          r.product || '—',
+          fmtInt(r.length),
+          r.internalStops,
+          r.terminatorCodon || '—',
+          r.strand || '—'
+        ];
+      });
+      var flagged = geneSummary.filter(function (r) { return r.pseudogeneFlag; }).length;
+      geneHtml = '<section><h2>Per-gene summary</h2>' +
+        renderHtmlTable(gHead, gRows, geneSummary.map(function (r) { return r.pseudogeneFlag; })) +
+        '<p class="note">' + fmtInt(geneSummary.length) + ' CDS' + (geneSummary.length === 1 ? '' : 's') +
+        (flagged ? ' — ' + fmtInt(flagged) + ' with in-frame internal stop(s) (possible pseudogene' + (flagged === 1 ? '' : 's') + ')' : '') +
+        '.</p></section>';
+    }
+
+    // --- results table (capped) ---
+    var shown = hits.slice(0, maxRows);
+    var rHead = ['ID', 'Seq', 'Start', 'End', 'Strand', 'Frame', 'Codon', 'Name'];
+    if (ann) rHead = rHead.concat(['Gene', 'Context']);
+    var rRows = shown.map(function (h) {
+      var codonCell = '<span class="codon" style="color:' + codonColor(h.codon, inks) + '">' + htmlEscape(h.codon) + '</span>';
+      var row = [
+        h.id == null ? '' : h.id,
+        h.seqId,
+        fmtInt(h.start),
+        fmtInt(h.end),
+        h.strand === '-' ? '−' : '+',
+        signedFrame(h),
+        { html: codonCell },
+        h.name == null ? '' : h.name
+      ];
+      if (ann) {
+        row.push(h.geneName || h.locusTag || (h.featureId != null ? h.featureId : '') || '—');
+        row.push(h.context || '—');
+      }
+      return row;
+    });
+    var resultsNote = hits.length > shown.length
+      ? 'Showing the first ' + fmtInt(shown.length) + ' of ' + fmtInt(hits.length) +
+        ' hits. Download the CSV / TSV export for every row.'
+      : 'Showing all ' + fmtInt(hits.length) + ' hit' + (hits.length === 1 ? '' : 's') + '.';
+    var resultsHtml = '<section><h2>Results</h2>' +
+      renderHtmlTable(rHead, rRows, null) +
+      '<p class="note">' + resultsNote + '</p></section>';
+
+    // --- provenance ---
+    var prov = data.provenance || {};
+    var provBits = [];
+    if (prov.translationTable) provBits.push('Translation table ' + (prov.translationTable.id != null ? prov.translationTable.id + ' — ' : '') + htmlEscape(prov.translationTable.name || ''));
+    if (prov.organism) provBits.push('Organism: ' + htmlEscape(prov.organism));
+    var provHtml = provBits.length ? '<p class="prov">' + provBits.join(' &middot; ') + '</p>' : '';
+
+    var rootVars = '';
+    for (var vi = 0; vi < 6; vi++) rootVars += '--codon-' + (vi + 1) + ':' + (fills[vi] || fills[fills.length - 1]) + ';';
+
+    return '<!doctype html>\n<html lang="en"><head><meta charset="utf-8">' +
+      '<meta name="viewport" content="width=device-width, initial-scale=1">' +
+      '<title>' + htmlEscape(title) + '</title>' +
+      '<style>' + reportCSS(rootVars) + '</style></head><body>' +
+      '<main>' +
+      '<header><h1>' + htmlEscape(title) + '</h1>' +
+      '<p class="meta">Generated ' + htmlEscape(generatedAt) + ' &middot; Stop Codon Finder</p>' +
+      provHtml + '</header>' +
+      '<section><h2>Summary</h2><div class="grid">' + cardHtml + '</div></section>' +
+      chartHtml +
+      frameTableHtml +
+      geneHtml +
+      resultsHtml +
+      '<footer><p class="note">' + htmlEscape(COORD_NOTE) + '</p></footer>' +
+      '</main></body></html>\n';
+  }
+
+  // Render a table from a header array + rows of arrays. A cell may be a string,
+  // a number, or { html: '<...>' } for pre-escaped markup (codon pills). An
+  // optional `flags` array (one boolean per row) marks a row with a warn dot.
+  function renderHtmlTable(header, rows, flags) {
+    var thead = '<thead><tr>' + header.map(function (h) { return '<th>' + htmlEscape(h) + '</th>'; }).join('') + '</tr></thead>';
+    var body = rows.map(function (cells, ri) {
+      var warn = flags && flags[ri] ? '<span class="dot" title="in-frame internal stop(s)"></span> ' : '';
+      var tds = cells.map(function (c, ci) {
+        var inner = (c && typeof c === 'object' && c.html != null) ? c.html : htmlEscape(c);
+        return '<td>' + (ci === 0 ? warn : '') + inner + '</td>';
+      }).join('');
+      return '<tr>' + tds + '</tr>';
+    }).join('');
+    return '<div class="tbl-wrap"><table>' + thead + '<tbody>' + body + '</tbody></table></div>';
+  }
+
+  function reportCSS(rootVars) {
+    return ':root{' + rootVars + '--fg:#1a2027;--muted:#5a6672;--line:#dce3ea;--bg:#fff;--sub:#f4f7fa;}' +
+      '*{box-sizing:border-box;}' +
+      'body{margin:0;background:#eef2f6;color:var(--fg);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}' +
+      'main{max-width:1000px;margin:0 auto;padding:32px 24px 56px;background:var(--bg);}' +
+      'h1{font-size:1.6rem;margin:0 0 4px;}h2{font-size:1.15rem;margin:0 0 12px;border-bottom:2px solid var(--line);padding-bottom:6px;}' +
+      'header{margin-bottom:28px;}.meta{color:var(--muted);margin:0;font-size:.85rem;}' +
+      '.prov{color:var(--muted);font-size:.85rem;margin:8px 0 0;}' +
+      'section{margin:28px 0;}' +
+      '.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;}' +
+      '.grid .card{border:1px solid var(--line);border-radius:8px;padding:12px 14px;background:var(--sub);}' +
+      '.grid .card.hero{background:#0072b2;border-color:#0072b2;color:#fff;}' +
+      '.grid .lbl{font-size:.78rem;color:var(--muted);display:flex;align-items:center;gap:6px;}' +
+      '.grid .card.hero .lbl,.grid .card.hero .sub{color:rgba(255,255,255,.85);}' +
+      '.grid .val{font-size:1.4rem;font-weight:700;margin-top:4px;}' +
+      '.grid .sub{font-size:.72rem;color:var(--muted);margin-top:2px;}' +
+      '.sw{display:inline-block;width:11px;height:11px;border-radius:3px;flex:none;}' +
+      '.chart{overflow-x:auto;padding:8px 0;}.chart svg{max-width:100%;height:auto;}' +
+      '.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:.82rem;color:var(--muted);margin-top:8px;}' +
+      '.leg{display:inline-flex;align-items:center;gap:6px;}' +
+      '.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px;}' +
+      'table{border-collapse:collapse;width:100%;font-size:.85rem;}' +
+      'th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);white-space:nowrap;}' +
+      'th{background:var(--sub);font-weight:600;position:sticky;top:0;}' +
+      'tbody tr:nth-child(even){background:#fafcfe;}' +
+      '.codon{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-weight:700;}' +
+      '.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#d97706;vertical-align:middle;}' +
+      '.note{color:var(--muted);font-size:.8rem;margin:10px 0 0;}' +
+      'footer{margin-top:32px;padding-top:16px;border-top:1px solid var(--line);}' +
+      '@media print{body{background:#fff;}main{max-width:none;padding:0;}th{position:static;}.grid .card.hero{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}';
   }
 
   /** Trigger a client-side download via Blob + object URL. No server involved. */
@@ -243,11 +587,20 @@
 
   global.CodonReport = {
     FRAME_ORDER: FRAME_ORDER,
+    COORD_NOTE: COORD_NOTE,
     buildSummary: buildSummary,
     buildGeneSummary: buildGeneSummary,
     geneticCodeSanity: geneticCodeSanity,
+    buildFrameBreakdown: buildFrameBreakdown,
     toCSV: toCSV,
+    toTSV: toTSV,
+    toMarkdown: toMarkdown,
+    geneSummaryToCSV: geneSummaryToCSV,
+    geneSummaryToTSV: geneSummaryToTSV,
+    frameBreakdownToCSV: frameBreakdownToCSV,
+    frameBreakdownToTSV: frameBreakdownToTSV,
     toJSON: toJSON,
+    toHTMLReport: toHTMLReport,
     triggerDownload: triggerDownload
   };
 })(typeof window !== 'undefined' ? window : this);

@@ -16,12 +16,15 @@
   /* Ordered codon color ramp -- assigned to the active table's ordered stop
      list by INDEX (--codon-1 = first stop, etc.), never by codon name, so a
      codon never means two different colors. */
-  --codon-1: #b8860b; /* ochre  */
-  --codon-2: #e08a00; /* amber  */
-  --codon-3: #0f9e8f; /* opal   */
-  --codon-4: #5b6cc4; /* indigo */
-  --codon-5: #b5468b; /* magenta*/
-  --codon-6: #6c7a89; /* slate  */
+  /* Default = colour-blind-safe (Okabe–Ito). JS (palettes.js) overrides these
+     inline when another scheme is chosen; these values keep the default correct
+     with JS disabled and avoid any first-paint flash. */
+  --codon-1: #e69f00; /* orange         */
+  --codon-2: #56b4e9; /* sky blue       */
+  --codon-3: #009e73; /* bluish-green   */
+  --codon-4: #d55e00; /* vermillion     */
+  --codon-5: #0072b2; /* blue           */
+  --codon-6: #cc79a7; /* reddish-purple */
 
   /* Legacy aliases kept for any inline reference */
   --ochre: var(--codon-1);
@@ -33,12 +36,30 @@
      these are darkened to meet WCAG AA (>=4.5:1) on --bg-elevated (#fff), since
      the standard-stop hues (ochre/amber/opal) fail as small bold text on white.
      Overridden back to the bright hues in dark mode. */
-  --codon-1-ink: #8a6300;
-  --codon-2-ink: #9a5b00;
-  --codon-3-ink: #0b6f64;
-  --codon-4-ink: #4a58ab;
-  --codon-5-ink: #9c3874;
-  --codon-6-ink: #566470;
+  --codon-1-ink: #946200;
+  --codon-2-ink: #1f6f9e;
+  --codon-3-ink: #00785a;
+  --codon-4-ink: #b34a00;
+  --codon-5-ink: #0067a3;
+  --codon-6-ink: #a24c7e;
+
+  /* --- Gemstone identity (decorative fills/borders/gradients ONLY) --------- */
+  --gem-ochre: var(--codon-1);          /* TAA */
+  --gem-amber: var(--codon-2);          /* TAG */
+  --gem-opal:  var(--codon-3);          /* TGA */
+  /* faceted highlight tints for gem gradients (fixed, read fine in both themes
+     because they only ever sit under other decoration, never behind text) */
+  --gem-ochre-hi: #e6c24d;
+  --gem-amber-hi: #ffb85e;
+  --gem-opal-hi:  #4fe0c8;
+
+  /* warm paper wash for the page body (very low alpha; cards stay opaque) */
+  --paper-glow-a: rgba(184,134,11,0.055);   /* ochre glow, top-left  */
+  --paper-glow-b: rgba(15,158,143,0.045);   /* opal glow, top-right  */
+  --paper-grain:  rgba(120,110,90,0.020);   /* faint tactile grain   */
+
+  /* hairline "gel" divider tint */
+  --rule-fade: color-mix(in srgb, var(--border) 70%, transparent);
 
   --strand-plus: #2563eb;
   --strand-minus: #a855f7;
@@ -86,12 +107,12 @@
 }
 
 :root[data-theme="dark"] {
-  --codon-1: #d8a938;
-  --codon-2: #f0a844;
-  --codon-3: #35d0b6;
-  --codon-4: #8fa0e8;
-  --codon-5: #e07ac0;
-  --codon-6: #9aa7b4;
+  --codon-1: #f0a830;
+  --codon-2: #6bc0f0;
+  --codon-3: #2fc79a;
+  --codon-4: #f0813c;
+  --codon-5: #4aa8e6;
+  --codon-6: #e39bc4;
 
   /* On the dark card the bright hues already pass AA, so the pill ink IS the
      chart hue. */
@@ -102,6 +123,11 @@
   --codon-5-ink: var(--codon-5);
   --codon-6-ink: var(--codon-6);
   --strand-minus-ink: var(--strand-minus);
+
+  /* warmer paper wash for dark theme (decorative, non-text) */
+  --paper-glow-a: rgba(216,169,56,0.045);
+  --paper-glow-b: rgba(53,208,182,0.040);
+  --paper-grain:  rgba(180,190,200,0.022);
 
   --ctx-terminator: #52d59a;
   --ctx-terminator-bg: rgba(82, 213, 154, 0.16);
@@ -143,12 +169,12 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --codon-1: #d8a938;
-    --codon-2: #f0a844;
-    --codon-3: #35d0b6;
-    --codon-4: #8fa0e8;
-    --codon-5: #e07ac0;
-    --codon-6: #9aa7b4;
+    --codon-1: #f0a830;
+    --codon-2: #6bc0f0;
+    --codon-3: #2fc79a;
+    --codon-4: #f0813c;
+    --codon-5: #4aa8e6;
+    --codon-6: #e39bc4;
 
     --codon-1-ink: var(--codon-1);
     --codon-2-ink: var(--codon-2);
@@ -157,6 +183,11 @@
     --codon-5-ink: var(--codon-5);
     --codon-6-ink: var(--codon-6);
     --strand-minus-ink: var(--strand-minus);
+
+    /* warmer paper wash for dark theme (decorative, non-text) */
+    --paper-glow-a: rgba(216,169,56,0.045);
+    --paper-glow-b: rgba(53,208,182,0.040);
+    --paper-grain:  rgba(180,190,200,0.022);
 
     --ctx-terminator: #52d59a;
     --ctx-terminator-bg: rgba(82, 213, 154, 0.16);
@@ -201,11 +232,19 @@
 html, body { margin: 0; padding: 0; }
 
 body {
-  background: var(--bg);
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(1100px 620px at 12% -8%,  var(--paper-glow-a), transparent 60%),
+    radial-gradient(1000px 700px at 100% 0%,  var(--paper-glow-b), transparent 55%),
+    radial-gradient(var(--paper-grain) 0.5px, transparent 0.5px);
+  background-size: auto, auto, 22px 22px;   /* 3rd layer = faint dot grain */
+  background-attachment: fixed, fixed, fixed;
   color: var(--text);
   font-family: var(--font-sans);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
+  text-rendering: optimizeLegibility;
   transition: background-color 0.15s ease, color 0.15s ease;
 }
 
@@ -235,7 +274,7 @@ a { color: var(--accent-strong); }
   justify-content: space-between;
   gap: 16px;
   padding: 28px 0 20px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--rule-fade);
   margin-bottom: 28px;
 }
 
@@ -244,14 +283,19 @@ a { color: var(--accent-strong); }
 .brand-mark {
   width: 42px; height: 42px;
   border-radius: var(--radius-md);
-  background: linear-gradient(135deg, var(--codon-1), var(--codon-2) 50%, var(--codon-3));
+  background: none;                 /* override the old gradient box */
+  overflow: hidden;
   display: flex; align-items: center; justify-content: center;
   color: #fff; font-weight: 700; font-size: 1rem;
   box-shadow: var(--shadow); flex: none;
 }
 
-.brand h1 { font-size: 1.35rem; margin: 0; letter-spacing: -0.01em; }
+.brand h1 { font-size: 1.35rem; margin: 0; letter-spacing: -0.02em; }
 .brand p { margin: 2px 0 0; color: var(--text-muted); font-size: 0.92rem; }
+.brand p em {                       /* gemstone words in tagline (decorative underline) */
+  font-style: normal; font-weight: 600;
+  border-bottom: 2px solid var(--gem-amber);
+}
 
 .header-actions { display: flex; align-items: center; gap: 10px; }
 
@@ -263,11 +307,17 @@ section.card {
   border-radius: var(--radius-lg);
   padding: 22px;
   box-shadow: var(--shadow);
+  transition: transform .18s ease, box-shadow .18s ease, border-color .12s ease;
+  will-change: transform;
+}
+section.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 4px rgba(16,24,32,.06), 0 14px 34px rgba(16,24,32,.10);
 }
 
 #results-section { display: flex; flex-direction: column; gap: 24px; }
 
-h2 { margin: 0 0 4px; font-size: 1.05rem; }
+h2 { margin: 0 0 4px; font-size: 1.05rem; letter-spacing: -0.005em; }
 
 .section-intro { color: var(--text-muted); font-size: 0.9rem; margin: 0 0 16px; }
 
@@ -320,6 +370,25 @@ th button:focus-visible,
   color: var(--text); font-size: 1.05rem;
 }
 .icon-toggle:hover { border-color: var(--accent); }
+
+/* Codon colour-scheme selector (header, beside the theme toggle) */
+.scheme-field { display: inline-flex; align-items: center; gap: 6px; }
+.scheme-label {
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--text-muted); font-size: 1rem; line-height: 1;
+}
+.scheme-select {
+  height: 40px;
+  padding: 0 30px 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elevated);
+  color: var(--text);
+  font: inherit; font-size: 0.84rem; font-weight: 600;
+  cursor: pointer;
+  max-width: 12rem;
+}
+.scheme-select:hover { border-color: var(--accent); }
 
 /* --------------------------- Dropdown menu ------------------------------- */
 
@@ -567,7 +636,17 @@ th button:focus-visible,
   height: 100%; width: 0%;
   background: linear-gradient(90deg, var(--codon-1), var(--codon-2), var(--codon-3));
   transition: width 0.18s ease;
+  position: relative; overflow: hidden;
 }
+/* travelling "gel" scan band on the determinate fill */
+.progress-fill::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.45), transparent);
+  transform: translateX(-100%);
+  animation: scfScan 1.4s ease-in-out infinite;
+}
+@keyframes scfScan { to { transform: translateX(100%); } }
+html[data-scf-paused] .progress-fill::after { animation-play-state: paused; }
 .progress-track.indeterminate .progress-fill {
   width: 40% !important;
   background: linear-gradient(90deg, transparent, var(--accent), transparent);
@@ -601,7 +680,12 @@ th button:focus-visible,
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: 14px 16px;
+  transition: transform .16s ease, box-shadow .16s ease;
 }
+.stat-card:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+.stat-card.accent-1:hover { box-shadow: -3px 0 0 -1px var(--gem-ochre), var(--shadow); }
+.stat-card.accent-2:hover { box-shadow: -3px 0 0 -1px var(--gem-amber), var(--shadow); }
+.stat-card.accent-3:hover { box-shadow: -3px 0 0 -1px var(--gem-opal),  var(--shadow); }
 .stat-card.hero {
   grid-column: span 2;
   background: linear-gradient(135deg, var(--accent-bg), transparent);
@@ -624,6 +708,17 @@ th button:focus-visible,
 .stat-card.strand-plus { border-left: 4px solid var(--strand-plus); }
 .stat-card.strand-minus { border-left: 4px solid var(--strand-minus); }
 
+/* Faceted "jewel" corner accent on the three gemstone stat cards (decorative). */
+.stat-card.accent-1, .stat-card.accent-2, .stat-card.accent-3 { position: relative; overflow: hidden; }
+.stat-card.accent-1::after, .stat-card.accent-2::after, .stat-card.accent-3::after {
+  content: ""; position: absolute; top: -10px; right: -10px;
+  width: 34px; height: 34px; border-radius: 6px; transform: rotate(45deg);
+  opacity: .22; pointer-events: none;
+}
+.stat-card.accent-1::after { background: conic-gradient(from 45deg, var(--gem-ochre-hi), var(--gem-ochre), var(--gem-ochre-hi)); }
+.stat-card.accent-2::after { background: conic-gradient(from 45deg, var(--gem-amber-hi), var(--gem-amber), var(--gem-amber-hi)); }
+.stat-card.accent-3::after { background: conic-gradient(from 45deg, var(--gem-opal-hi),  var(--gem-opal),  var(--gem-opal-hi)); }
+
 /* ------------------------------- Frame chart ------------------------------ */
 
 .frame-chart-wrap { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
@@ -636,6 +731,11 @@ th button:focus-visible,
 .codon-legend-label { font-weight: 600; color: var(--text-muted); }
 .codon-legend-item { display: inline-flex; align-items: center; gap: 6px; }
 .codon-legend-name { color: var(--text-muted); }
+/* faint faceted fill behind the (still --codon-ink) legend pill text */
+.codon-legend .codon-pill {
+  position: relative;
+  background: linear-gradient(135deg, color-mix(in srgb, currentColor 8%, transparent), transparent);
+}
 
 /* --------------------------------- Tables --------------------------------- */
 
@@ -733,6 +833,13 @@ tbody tr:hover { background: var(--bg-subtle); }
 .download-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .bed9-check { display: inline-flex; align-items: center; gap: 5px; font-size: 0.8rem; color: var(--text-muted); white-space: nowrap; }
 .bed9-check input { margin: 0; }
+/* Visual divider between the file-format buttons and the copy-to-clipboard
+   actions in the results download row. Collapses when the row wraps. */
+.dl-sep { width: 1px; align-self: stretch; min-height: 24px; background: var(--border); margin: 0 2px; }
+
+/* Small per-table download controls on the frame / gene cards. */
+.card-dl { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
+.card-dl-label { font-size: 0.8rem; color: var(--text-muted); }
 
 /* -------------------------- Visualizations (genome map) -------------------- */
 
@@ -771,12 +878,27 @@ tr.row-flash > td {
 
 /* --------------------------------- Footer ---------------------------------- */
 
-footer {
+footer, .scf-footer {
   margin-top: 40px; padding-top: 20px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--rule-fade);
   color: var(--text-muted); font-size: 0.82rem; text-align: center;
 }
-footer a { color: inherit; text-decoration: underline; }
+footer a, .scf-footer a { color: inherit; text-decoration: underline; }
+
+.scf-gems { display: inline-flex; gap: 8px; margin-bottom: 10px; }
+.scf-gem {
+  font-family: var(--font-mono); font-size: .72rem; font-weight: 700; letter-spacing: .04em;
+  padding: 3px 9px; border-radius: 6px; color: #fff;
+  clip-path: polygon(12% 0,88% 0,100% 50%,88% 100%,12% 100%,0 50%);  /* faceted gem */
+}
+.scf-gem.g1 { background: linear-gradient(135deg,var(--gem-ochre-hi),var(--gem-ochre)); }
+.scf-gem.g2 { background: linear-gradient(135deg,var(--gem-amber-hi),var(--gem-amber)); }
+.scf-gem.g3 { background: linear-gradient(135deg,var(--gem-opal-hi), var(--gem-opal));  }
+.scf-fact {
+  min-height: 1.2em; margin: 6px 0 10px; color: var(--text); font-weight: 500;
+  transition: opacity .5s ease;
+}
+@media (prefers-reduced-motion: reduce) { .scf-fact { transition: none; } }
 
 /* --------------------------------- Responsive ------------------------------ */
 
@@ -798,7 +920,113 @@ footer a { color: inherit; text-decoration: underline; }
   * { transition: none !important; }
   .progress-track.indeterminate .progress-fill { animation: none; width: 100% !important; opacity: 0.5; }
   tr.row-flash > td { animation: none !important; }
+  /* --- scf polish layer: neutralize every decorative animation --- */
+  .scf-helix-spin { animation: none; transform: scaleX(1); opacity: .9; }
+  .scf-codon-rule::before { animation: none; transform: none; }
+  .progress-fill::after { animation: none; opacity: 0; }
+  .scf-helix.scf-pop .scf-helix-spin { animation: none; }
+  section.card:hover, .stat-card:hover { transform: none; }
+  #results-section:not([hidden]) > * { animation: none; }
 }
+
+/* Global animation kill-switch: paused when the tab is hidden (JS toggles the
+   data-scf-paused attribute on <html>). */
+html[data-scf-paused] .scf-anim,
+html[data-scf-paused] .scf-anim *,
+html[data-scf-paused] .scf-codon-rule::before { animation-play-state: paused !important; }
+
+/* ==========================================================================
+   scf polish layer -- living hero, gem identity, entrance motion, footnotes
+   ========================================================================== */
+
+/* --- Gem-helix hero mark ------------------------------------------------- */
+.scf-helix-mark { width: 100%; height: 100%; display: block; }
+.scf-helix-spin {
+  transform-origin: 22px 22px;
+  animation: scfHelix 9s ease-in-out infinite;
+}
+@keyframes scfHelix {
+  0%,100% { transform: scaleX(1);    opacity: .85; }
+  50%     { transform: scaleX(.18);  opacity: 1;   }  /* edge-on view of a turning helix */
+}
+#scf-helix { cursor: pointer; }
+
+/* one-shot "base-pair pop" easter egg on click */
+.scf-helix.scf-pop .scf-helix-spin { animation: scfPop .6s ease; }
+@keyframes scfPop {
+  0% { transform: scaleX(1); } 30% { transform: scaleX(1.15) rotate(-3deg); }
+  60% { transform: scaleX(.4); } 100% { transform: scaleX(1); }
+}
+
+/* --- Codon-ribbon rule: drifting gemstone ticks -------------------------- */
+/* The drift is carried on a ::before layer via transform (GPU-compositable,
+   no per-frame repaint) rather than animating background-position. The layer
+   overhangs by one 42px period on each side and slides exactly one period, so
+   the motion is seamless while the host element is clipped to the pill shape. */
+.scf-codon-rule {
+  height: 3px; margin: 14px 0 0; border-radius: 999px;
+  position: relative; overflow: hidden; opacity: .8;
+}
+.scf-codon-rule::before {
+  content: ""; position: absolute; top: 0; bottom: 0; left: -42px; right: -42px;
+  background: repeating-linear-gradient(90deg,
+    var(--gem-ochre) 0 5px, transparent 5px 13px,
+    var(--gem-amber) 13px 18px, transparent 18px 26px,
+    var(--gem-opal)  26px 31px, transparent 31px 42px);
+  background-size: 42px 100%;
+  will-change: transform;
+  animation: scfDrift 24s linear infinite;   /* seamless: 42px period */
+}
+@keyframes scfDrift { to { transform: translateX(42px); } }
+
+/* --- Results entrance: staggered rise on reveal -------------------------- */
+#results-section:not([hidden]) > * {
+  animation: scfRise .42s cubic-bezier(.22,.61,.36,1) both;
+}
+#results-section:not([hidden]) > :nth-child(1) { animation-delay: .00s; }
+#results-section:not([hidden]) > :nth-child(2) { animation-delay: .06s; }
+#results-section:not([hidden]) > :nth-child(3) { animation-delay: .12s; }
+#results-section:not([hidden]) > :nth-child(4) { animation-delay: .18s; }
+#results-section:not([hidden]) > :nth-child(n+5){ animation-delay: .22s; }
+@keyframes scfRise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+/* --- Sci footnote: dotted "hover word" reusing the .help tooltip bubble --- */
+.sci-note {
+  border-bottom: 1px dotted var(--text-faint);
+  cursor: help; position: relative; outline: none;
+}
+.sci-note:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+.sci-note[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute; bottom: calc(100% + 8px); left: 50%;
+  transform: translateX(-50%);
+  width: max-content; max-width: 260px;
+  background: var(--text); color: var(--bg-elevated);
+  padding: 7px 10px; border-radius: var(--radius-sm);
+  font-size: 0.76rem; font-weight: 500; line-height: 1.4;
+  text-transform: none; letter-spacing: normal;
+  white-space: normal; text-align: left;
+  box-shadow: var(--shadow); z-index: 40;
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+.sci-note[data-tip]::before {
+  content: ""; position: absolute; bottom: calc(100% + 3px); left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent; border-top-color: var(--text);
+  opacity: 0; visibility: hidden; z-index: 40;
+  transition: opacity 0.12s ease;
+}
+.sci-note[data-tip]:hover::after, .sci-note[data-tip]:focus-visible::after,
+.sci-note[data-tip]:hover::before, .sci-note[data-tip]:focus-visible::before {
+  opacity: 1; visibility: visible;
+}
+
+/* --- Typography refinements (system fonts only) -------------------------- */
+.stat-label, .pm-label, thead th, .slot-tag { font-feature-settings: "tnum" 0; }
+.stat-value, .pm-val, .progress-percent, td, .def-table td { font-variant-numeric: tabular-nums; }
+code, .codon-pill, .strand-pill, .gene-chip, .example-box { font-feature-settings: "zero" 1, "tnum" 1; }
+.disclosure-body p, .section-intro { line-height: 1.6; }
 
 /* ==========================================================================
    Teaching-grade UI: help icons/tooltips, disclosures, nudges, explainers,
