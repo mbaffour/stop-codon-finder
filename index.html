@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stop Codon Finder</title>
+<meta name="description" content="Six-frame &amp; annotation-aware stop-codon scanning for FASTA, GFF3 &amp; GenBank -- 100% in your browser. No upload, no backend.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A7%AC%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<noscript>
+  <div style="padding:24px;font-family:sans-serif;">
+    Stop Codon Finder requires JavaScript to run (all scanning happens locally in your browser -- nothing is uploaded). Please enable JavaScript to continue.
+  </div>
+</noscript>
+
+<div class="app-shell">
+
+  <header class="app-header">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">DNA</div>
+      <div>
+        <h1>Stop Codon Finder</h1>
+        <p>Six-frame &amp; annotation-aware stop-codon scanning for FASTA, GFF3 &amp; GenBank &mdash; 100% in your browser</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <a class="btn btn-ghost btn-sm" href="README.md" target="_blank" rel="noopener">Help / README</a>
+      <button id="theme-toggle" class="icon-toggle" type="button" aria-pressed="false" aria-label="Toggle dark mode">
+        <span id="theme-toggle-icon" aria-hidden="true">&#127769;</span>
+      </button>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- ============================ CARD 1: LOAD ========================= -->
+    <section class="card" id="upload-section" aria-labelledby="upload-heading">
+      <h2 id="upload-heading">1. Load sequence(s)</h2>
+      <p class="section-intro">Drop <strong>one</strong> file (FASTA, GFF3, or GenBank) or a <strong>FASTA&nbsp;+&nbsp;GFF3 pair</strong>. Formats are auto-detected from content. Files are read locally and never leave your browser.</p>
+
+      <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Drag and drop up to two files here, or press Enter to choose files">
+        <span class="dz-icon" aria-hidden="true">&#129516;</span>
+        <div class="dz-title">Drag &amp; drop your file(s) here</div>
+        <div class="dz-sub">FASTA (.fasta/.fa/.fna/.ffn) &middot; GFF3 (.gff/.gff3) &middot; GenBank (.gb/.gbk/.genbank) &mdash; single file or a FASTA+GFF3 pair</div>
+        <div class="dz-actions">
+          <button id="choose-file-btn" class="btn btn-primary" type="button">Choose File(s)&hellip;</button>
+          <div class="menu" id="example-menu">
+            <button id="load-example-btn" class="btn" type="button" aria-haspopup="true" aria-expanded="false">Load example &#9662;</button>
+            <div class="menu-list" id="example-list" role="menu" hidden>
+              <button type="button" role="menuitem" data-example="fasta">FASTA (synthetic, both strands)</button>
+              <button type="button" role="menuitem" data-example="pair">FASTA + GFF3 pair (annotated)</button>
+              <button type="button" role="menuitem" data-example="genbank">GenBank (sequence + features)</button>
+              <button type="button" role="menuitem" data-example="lambda">Lambda phage (real, 48 kb GenBank)</button>
+            </div>
+          </div>
+        </div>
+        <input id="file-input" class="visually-hidden" type="file" multiple
+               accept=".fasta,.fa,.fna,.ffn,.txt,.gff,.gff3,.gtf,.gb,.gbk,.genbank,.gbff" aria-hidden="true" tabindex="-1">
+      </div>
+
+      <div id="slots" class="slots" hidden>
+        <div class="slot" id="slot-a" data-role="sequence">
+          <div class="slot-head"><span class="slot-tag">Sequence</span></div>
+          <div class="slot-body" id="slot-a-body"></div>
+        </div>
+        <div class="slot" id="slot-b" data-role="annotation">
+          <div class="slot-head"><span class="slot-tag">Annotation</span></div>
+          <div class="slot-body" id="slot-b-body"></div>
+        </div>
+      </div>
+
+      <div class="load-footer" id="load-footer" hidden>
+        <button id="reset-btn" class="btn btn-ghost btn-sm" type="button">Clear / Reset</button>
+      </div>
+    </section>
+
+    <!-- =========================== CARD 2: SETTINGS ===================== -->
+    <section class="card" id="settings-section" aria-labelledby="settings-heading" hidden>
+      <h2 id="settings-heading">2. Scan settings</h2>
+
+      <div class="settings-grid">
+        <div class="setting">
+          <span class="setting-label" id="mode-label">Scan mode<span class="help" tabindex="0" role="note" aria-label="Scan mode help" data-tip="All stop codons reports every stop in all six frames. Coding / predicted keeps only stops that terminate an annotated CDS, or (with no annotation) the stops that end predicted ORFs.">?</span></span>
+          <div class="segmented" id="mode-group" role="radiogroup" aria-labelledby="mode-label">
+            <button type="button" class="seg" role="radio" data-mode="all" aria-checked="true" tabindex="0">All stop codons</button>
+            <button type="button" class="seg" role="radio" data-mode="coding" aria-checked="false" tabindex="-1">Coding / predicted</button>
+          </div>
+          <p class="setting-hint" id="mode-hint">Report every stop codon in all six frames.</p>
+        </div>
+
+        <div class="setting">
+          <label class="setting-label" for="table-select">Genetic code (NCBI translation table)<span class="help" tabindex="0" role="note" aria-label="Genetic code help" data-tip="Which codons mean stop depends on the organism's genetic code. The standard code uses TAA/TAG/TGA, but many organisms differ (e.g. ciliates read TAA/TAG as glutamine). Pick the NCBI table for your organism; the caption below lists the actual stop codons.">?</span></label>
+          <select id="table-select" title="Pick the NCBI translation table for your organism; this overrides any auto-detection."></select>
+          <p class="setting-hint" id="table-stops-caption">Stops: TAA, TAG, TGA</p>
+          <p class="setting-hint" id="table-help">Pick the NCBI translation table for your organism; this overrides any auto-detection.</p>
+        </div>
+
+        <div class="setting" id="organism-setting">
+          <label class="setting-label" for="organism-input">Organism <span class="setting-optional">(optional)</span></label>
+          <input type="text" id="organism-input" list="organism-list" autocomplete="off" spellcheck="false"
+                 placeholder="e.g. Escherichia coli"
+                 title="Type your organism to auto-pick a translation table. The dropdown always wins if you change it.">
+          <datalist id="organism-list">
+            <option value="Escherichia coli"></option>
+            <option value="Lambda phage"></option>
+            <option value="Mycoplasma"></option>
+            <option value="Saccharomyces cerevisiae"></option>
+            <option value="Homo sapiens"></option>
+            <option value="Human mitochondrion"></option>
+            <option value="Tetrahymena"></option>
+            <option value="Chloroplast / plastid"></option>
+            <option value="Arabidopsis thaliana"></option>
+          </datalist>
+          <p class="setting-hint">Sets the translation table above from your organism. Manual changes to the dropdown always win.</p>
+        </div>
+
+        <div class="setting" id="minorf-setting" hidden>
+          <label class="setting-label" for="minorf-number">Minimum ORF length</label>
+          <div class="slider-row">
+            <input type="range" id="minorf-slider" min="1" max="150" step="1" value="30" aria-label="Minimum ORF length in codons">
+            <input type="number" id="minorf-number" min="1" max="5000" step="1" value="30" aria-label="Minimum ORF length in codons">
+            <span class="unit">codons</span>
+          </div>
+          <label class="check" id="altstarts-wrap"><input type="checkbox" id="alt-starts-toggle"> Allow alternative start codons (GTG, TTG)</label>
+        </div>
+      </div>
+
+      <details class="disclosure" id="advanced-disclosure">
+        <summary>Advanced options &amp; conventions <span class="summary-tag">optional</span></summary>
+        <div class="disclosure-body">
+          <p>Sensible defaults are applied automatically &mdash; open this only if you need to know exactly how the scan behaves or you are comparing against another tool.</p>
+          <ul>
+            <li><strong>Start-codon policy.</strong> ORF prediction (used only when you pick <em>Coding / predicted</em> with no annotation loaded) requires an <code>ATG</code> start by default &mdash; the same default as NCBI ORFfinder and EMBOSS. Tick <em>Allow alternative start codons</em> in the Minimum ORF control to also accept <code>GTG</code>/<code>TTG</code> initiators. One ORF is reported per stop (the longest, 5&prime;-most start), so nested internal-ATG ORFs are not enumerated.</li>
+            <li><strong>Stop-to-stop vs start-to-stop.</strong> Predicted ORFs are <em>start-to-stop</em> (an initiator is required). Stops that merely bound an open stretch with no start are still reported individually in <em>All stop codons</em> mode.</li>
+            <li><strong>Frame convention.</strong> Forward frames <code>+1/+2/+3</code> begin at positions 1/2/3. Reverse frames <code>&minus;1/&minus;2/&minus;3</code> are defined by position in the reverse-complement strand. This is internally consistent but frame <em>labels</em> may not line up 1:1 with ORFfinder or EMBOSS <code>sixpack</code>, which number frames differently.</li>
+            <li><strong>Per-feature genetic code.</strong> If your annotation declares one consistent <code>transl_table</code>, it is applied to every contig. Mixed declarations across contigs are not applied per-feature &mdash; a single global code is used and you are warned.</li>
+            <li><strong>Ambiguity (IUPAC) codes.</strong> A codon is called a stop only when <em>every</em> A/C/G/T resolution is a stop (so <code>TAR</code> = TAA/TAG counts, <code>TGN</code> does not). Codons containing an <code>N</code> or other ambiguous base that could be a stop under some resolutions are reported as a warning, not silently called.</li>
+            <li><strong>Stop codon in the CDS?</strong> GFF3/GenBank/RefSeq include the stop as the last 3&nbsp;bp of the CDS; Ensembl GTF excludes it as a separate feature. Terminator detection tolerates both conventions.</li>
+          </ul>
+          <p>Coordinates are <strong>1-based, inclusive, forward-strand</strong> for both strands (matching GFF3/GenBank). See <em>Learn &middot; How this works</em> below for worked examples.</p>
+        </div>
+      </details>
+
+      <div id="code-note" class="code-note" role="status" hidden>
+        <span class="code-note-icon" aria-hidden="true">&#8505;</span>
+        <span id="code-note-text" class="code-note-text"></span>
+        <button id="code-note-dismiss" class="code-note-dismiss" type="button" aria-label="Dismiss note">&times;</button>
+      </div>
+
+      <p class="settings-summary" id="settings-summary"></p>
+      <div class="settings-actions">
+        <button id="run-btn" class="btn btn-primary" type="button">Run scan</button>
+      </div>
+    </section>
+
+    <!-- =============================== BANNERS ========================== -->
+    <div id="error-banner" class="banner banner-error" role="alert" hidden>
+      <span aria-hidden="true">&#9888;</span>
+      <div>
+        <strong>Couldn&rsquo;t process that input</strong>
+        <span id="error-message"></span>
+      </div>
+    </div>
+
+    <div id="warning-banner" class="banner banner-warning" role="status" hidden>
+      <span aria-hidden="true">&#9888;</span>
+      <div>
+        <strong>Heads up</strong>
+        <span id="warning-message"></span>
+      </div>
+    </div>
+
+    <div id="info-banner" class="banner banner-info" role="status" hidden>
+      <span aria-hidden="true">&#8505;</span>
+      <div>
+        <strong>Note</strong>
+        <span id="info-message"></span>
+      </div>
+    </div>
+
+    <div id="success-banner" class="banner banner-success" role="status" hidden>
+      <span aria-hidden="true">&#10003;</span>
+      <div><span id="success-message"></span></div>
+    </div>
+
+    <!-- ============================== PROGRESS ========================== -->
+    <section class="card progress-panel" id="progress-section" hidden aria-labelledby="progress-heading">
+      <div class="progress-top">
+        <h2 id="progress-heading">Scanning&hellip;</h2>
+        <div class="progress-percent"><span id="progress-percent">0</span><span class="pct">%</span></div>
+      </div>
+      <div class="progress-track" id="progressbar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <div id="progress-fill" class="progress-fill"></div>
+      </div>
+      <div class="progress-metrics">
+        <span class="pm"><span class="pm-label">Elapsed</span><span id="progress-elapsed" class="pm-val">0:00</span></span>
+        <span class="pm"><span class="pm-label">Throughput</span><span id="progress-throughput" class="pm-val">&mdash;</span></span>
+        <span class="pm"><span class="pm-label">Remaining</span><span id="progress-eta" class="pm-val">estimating&hellip;</span></span>
+      </div>
+      <div class="progress-foot">
+        <div id="progress-stage" class="progress-stage" aria-live="polite">Preparing&hellip;</div>
+        <button id="cancel-btn" class="btn btn-sm btn-danger" type="button">Cancel</button>
+      </div>
+    </section>
+
+    <!-- =============================== RESULTS ========================== -->
+    <div id="results-section" hidden>
+
+      <div id="sanity-nudge" class="nudge" role="alert" hidden>
+        <span class="nudge-icon" aria-hidden="true">&#9888;</span>
+        <div class="nudge-body">
+          <strong>The selected genetic code may be wrong for this data</strong>
+          <span id="sanity-nudge-text"></span>
+          <div class="nudge-actions">
+            <button type="button" class="btn-nudge" id="sanity-nudge-fix">Review genetic code</button>
+          </div>
+        </div>
+      </div>
+
+      <section class="card" id="summary-card" aria-labelledby="summary-heading">
+        <h2 id="summary-heading">Summary<span class="help" tabindex="0" role="note" aria-label="Summary help" data-tip="Totals computed over every hit and every sequence (not just the rows shown in the table). Density is stops per 1,000 bp. GC content is the fraction of G+C bases.">?</span></h2>
+        <p class="section-intro" id="summary-provenance" hidden></p>
+        <div id="stat-grid" class="stat-grid"></div>
+      </section>
+
+      <section class="card" id="frame-card" aria-labelledby="frame-heading">
+        <h2 id="frame-heading">Per-frame breakdown<span class="help" tabindex="0" role="note" aria-label="Per-frame help" data-tip="A reading frame is one of three ways to group bases into codons on each strand. +1/+2/+3 read the forward strand starting at base 1/2/3; -1/-2/-3 read the reverse-complement strand. Bars are stacked by codon type.">?</span></h2>
+        <p class="section-intro">Stop-codon counts across all six reading frames (forward +1/+2/+3, reverse &minus;1/&minus;2/&minus;3), stacked by codon type.</p>
+        <div class="frame-chart-wrap">
+          <div id="frame-chart-container" role="img" aria-label="Bar chart of stop codon counts per reading frame"></div>
+          <div class="frame-table-wrap">
+            <table id="frame-table">
+              <caption>Counts per frame</caption>
+              <thead><tr id="frame-thead-row"></tr></thead>
+              <tbody id="frame-table-body"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="legend" id="frame-legend"></div>
+      </section>
+
+      <section class="card" id="viz-card" aria-labelledby="viz-heading">
+        <h2 id="viz-heading">Genome map &amp; tracks</h2>
+        <p class="section-intro">Stop codons plotted along the sequence. Ticks are colored by codon; hover a tick to highlight the same stop across every view and the results table, or click it to jump to its table row. Charts download as publication-ready SVG or PNG.</p>
+
+        <div class="viz-toolbar" id="viz-toolbar">
+          <div class="field" id="viz-record-field" hidden>
+            <label for="viz-record-select">Sequence</label>
+            <select id="viz-record-select"></select>
+          </div>
+        </div>
+
+        <div class="viz-block">
+          <div class="viz-block-head">
+            <h3>Six-frame stop track</h3>
+            <div class="viz-dl" data-viz="frame">
+              <button type="button" class="btn btn-ghost btn-sm" data-fmt="svg">SVG</button>
+              <button type="button" class="btn btn-ghost btn-sm" data-fmt="png">PNG</button>
+            </div>
+          </div>
+          <div class="viz-scroll"><div id="viz-frame" class="viz-canvas"></div></div>
+        </div>
+
+        <div class="viz-block">
+          <div class="viz-block-head">
+            <h3>Stop-codon density</h3>
+            <div class="viz-dl" data-viz="density">
+              <button type="button" class="btn btn-ghost btn-sm" data-fmt="svg">SVG</button>
+              <button type="button" class="btn btn-ghost btn-sm" data-fmt="png">PNG</button>
+            </div>
+          </div>
+          <div class="viz-scroll"><div id="viz-density" class="viz-canvas"></div></div>
+        </div>
+
+        <div class="viz-block" id="viz-circular-block" hidden>
+          <div class="viz-block-head">
+            <h3>Circular genome plot</h3>
+            <div class="viz-dl" data-viz="circular">
+              <button type="button" class="btn btn-ghost btn-sm" data-fmt="svg">SVG</button>
+              <button type="button" class="btn btn-ghost btn-sm" data-fmt="png">PNG</button>
+            </div>
+          </div>
+          <div class="viz-scroll viz-scroll-center"><div id="viz-circular" class="viz-canvas"></div></div>
+        </div>
+      </section>
+
+      <section class="card" id="genesummary-card" aria-labelledby="genesummary-heading" hidden>
+        <h2 id="genesummary-heading">Per-gene summary<span class="help" tabindex="0" role="note" aria-label="Per-gene summary help" data-tip="One row per CDS. Internal stops counts in-frame stop codons inside the coding sequence (a possible pseudogene or recoding signal). Terminator shows the stop codon that ends the CDS, if present.">?</span></h2>
+        <p class="section-intro">One row per CDS. An <span class="dot dot-warn" aria-hidden="true"></span> flag marks genes with in-frame internal stop codons (possible pseudogenes). Click a header to sort.</p>
+        <div class="table-scroll">
+          <table id="genesummary-table">
+            <thead><tr id="genesummary-thead-row"></tr></thead>
+            <tbody id="genesummary-body"></tbody>
+          </table>
+        </div>
+        <p id="genesummary-note" class="table-note"></p>
+      </section>
+
+      <section class="card" id="table-card" aria-labelledby="table-heading">
+        <h2 id="table-heading">Results<span class="help" tabindex="0" role="note" aria-label="Results help" data-tip="One row per stop codon. The Context column (with annotation) classifies each stop: CDS terminator, in-frame internal, out-of-frame, non-coding, or intergenic. Coordinates are 1-based inclusive, forward-strand for both strands.">?</span></h2>
+        <p class="section-intro">Click a column header to sort. Use the filters to narrow the table &mdash; downloads always include every hit, regardless of filters.</p>
+
+        <div id="readthrough-note" class="inline-explainer" hidden>
+          <span class="ie-icon" aria-hidden="true">&#129516;</span>
+          <div class="ie-body">
+            <strong><span id="readthrough-count"></span> in-frame stop(s) fall inside an annotated CDS.</strong>
+            <p>An in-frame stop within a coding sequence is not necessarily a defect. It is a <em>candidate</em> for programmed translational readthrough, selenocysteine (<code>TGA</code>&rarr;Sec) or pyrrolysine (<code>TAG</code>&rarr;Pyl) recoding, a &minus;1/+1 programmed ribosomal frameshift, a pseudogene, or an annotation/sequencing artifact &mdash; none of which can be distinguished from sequence alone. Genuine Sec/Pyl recodings declared via GenBank <code>/transl_except</code> are shown separately as &ldquo;Recoded&rdquo; and excluded from the pseudogene counts.</p>
+          </div>
+        </div>
+
+        <div class="controls-row">
+          <div class="field">
+            <label for="filter-seqid">Sequence ID contains</label>
+            <input type="text" id="filter-seqid" placeholder="e.g. contig_1">
+          </div>
+          <div class="field" id="filter-gene-field" hidden>
+            <label for="filter-gene">Gene contains</label>
+            <input type="text" id="filter-gene" placeholder="e.g. dnaA">
+          </div>
+          <div class="field">
+            <label for="filter-codon">Codon</label>
+            <select id="filter-codon"><option value="all">All codons</option></select>
+          </div>
+          <div class="field">
+            <label for="filter-strand">Strand</label>
+            <select id="filter-strand">
+              <option value="all">Both strands</option>
+              <option value="+">Forward (+)</option>
+              <option value="-">Reverse (&minus;)</option>
+            </select>
+          </div>
+          <div class="field" id="filter-context-field" hidden>
+            <label for="filter-context">Context</label>
+            <select id="filter-context">
+              <option value="all">All contexts</option>
+              <option value="cds-terminator">CDS terminator</option>
+              <option value="cds-internal-inframe">Within CDS (in-frame)</option>
+              <option value="cds-internal-outframe">Within CDS (out-of-frame)</option>
+              <option value="within-noncoding-gene">Within non-coding gene</option>
+              <option value="intergenic">Intergenic</option>
+              <option value="orf-terminator">ORF-predicted terminator</option>
+            </select>
+          </div>
+          <div class="spacer"></div>
+          <div class="download-row">
+            <button id="download-csv-btn" class="btn" type="button">CSV</button>
+            <button id="download-json-btn" class="btn" type="button">JSON</button>
+            <button id="download-gff3-btn" class="btn" type="button" title="GFF3 (1-based inclusive; phase column 0, reading frame in a frame= attribute)">GFF3</button>
+            <button id="download-bed-btn" class="btn" type="button" title="BED (0-based half-open; chromStart = start − 1)">BED</button>
+            <label class="check bed9-check"><input type="checkbox" id="bed9-toggle"> color by codon (BED9)</label>
+            <button id="download-fna-btn" class="btn" type="button" hidden title="Nucleotide FASTA of predicted ORFs / CDS">ORFs .fna</button>
+            <button id="download-faa-btn" class="btn" type="button" hidden title="Translated protein FASTA (uses the selected genetic code)">Proteins .faa</button>
+          </div>
+        </div>
+        <p id="export-note" class="table-note">Downloads include every hit (filters affect the table only). Coordinates: CSV / JSON / GFF3 are <strong>1-based, inclusive</strong>; BED is <strong>0-based, half-open</strong> (chromStart = start&nbsp;&minus;&nbsp;1). Each hit keeps one stable ID across all formats.</p>
+
+        <div class="table-scroll">
+          <table id="results-table">
+            <thead><tr id="results-thead-row"></tr></thead>
+            <tbody id="results-tbody"></tbody>
+          </table>
+        </div>
+        <p id="table-note" class="table-note"></p>
+      </section>
+
+    </div>
+
+    <!-- ============================ LEARN / EDUCATION =================== -->
+    <section class="card learn-card" id="learn-section" aria-labelledby="learn-heading">
+      <h2 id="learn-heading">Learn &middot; How this works</h2>
+      <p class="section-intro">Short, accurate primers on the biology and the conventions behind this tool. Written for working scientists and undergraduates alike &mdash; open any section.</p>
+      <nav class="learn-quick" aria-label="Jump to explainer">
+        <a href="#learn-stop">Stop codons</a>
+        <a href="#learn-frames">Reading frames</a>
+        <a href="#learn-code">Genetic codes</a>
+        <a href="#learn-orf">ORFs</a>
+        <a href="#learn-coords">Coordinates</a>
+        <a href="#learn-context">Context classes</a>
+        <a href="#learn-glossary">Glossary</a>
+        <a href="#learn-methods">Methods &amp; citing</a>
+      </nav>
+
+      <details class="disclosure" id="learn-stop">
+        <summary>What is a stop codon?</summary>
+        <div class="disclosure-body">
+          <p>A <strong>stop codon</strong> is a three-base codon that signals the ribosome to end translation instead of adding an amino acid. In the standard genetic code there are three:</p>
+          <ul>
+            <li><code>TAA</code> &mdash; historically named <strong>ochre</strong></li>
+            <li><code>TAG</code> &mdash; <strong>amber</strong></li>
+            <li><code>TGA</code> &mdash; <strong>opal</strong> (also &ldquo;umber&rdquo;)</li>
+          </ul>
+          <p>(DNA is shown with <code>T</code>; in mRNA these are <code>UAA</code>, <code>UAG</code>, <code>UGA</code>.) The classic ochre/amber/opal names apply <em>only</em> to these three &mdash; other stop codons in non-standard codes have no such name and are simply labelled &ldquo;stop&rdquo; here.</p>
+          <p><strong>The stop set is not universal.</strong> Which codons stop depends on the organism's genetic code (see below). For example ciliates read <code>TAA</code>/<code>TAG</code> as glutamine (leaving <code>TGA</code> as the only stop), vertebrate mitochondria add <code>AGA</code>/<code>AGG</code> as stops, and some organisms use unusual stops such as <code>TCA</code> or <code>TTA</code>. This tool always derives the stop set from the selected NCBI table, never from a hard-coded TAA/TAG/TGA assumption.</p>
+        </div>
+      </details>
+
+      <details class="disclosure" id="learn-frames">
+        <summary>Six reading frames &amp; the reverse complement</summary>
+        <div class="disclosure-body">
+          <p>Because codons are read three bases at a time and DNA is double-stranded, any sequence has <strong>six reading frames</strong>: three on the forward strand (<code>+1</code>, <code>+2</code>, <code>+3</code>, starting at base 1, 2, 3) and three on the reverse strand (<code>&minus;1</code>, <code>&minus;2</code>, <code>&minus;3</code>), read along the <strong>reverse complement</strong>. This tool scans all six.</p>
+          <p><strong>Worked example</strong> (a 12&nbsp;bp sequence). Reverse-strand hits are always reported in <em>forward-strand</em> coordinates, so a stop's three bases are contiguous with <code>start &le; end</code>, just like a forward hit:</p>
+          <div class="example-box">
+<span class="lbl">pos&nbsp;:</span>&nbsp;&nbsp;1&nbsp;&nbsp;2&nbsp;&nbsp;3&nbsp;&nbsp;<span class="hl-plus">4&nbsp;&nbsp;5&nbsp;&nbsp;6</span>&nbsp;&nbsp;7&nbsp;&nbsp;8&nbsp;&nbsp;9&nbsp;<span class="hl-minus">10&nbsp;11&nbsp;12</span>
+<span class="lbl">+&nbsp;&nbsp;&nbsp;:</span>&nbsp;&nbsp;C&nbsp;&nbsp;A&nbsp;&nbsp;T&nbsp;&nbsp;<span class="hl-plus">T&nbsp;&nbsp;A&nbsp;&nbsp;A</span>&nbsp;&nbsp;G&nbsp;&nbsp;G&nbsp;&nbsp;C&nbsp;&nbsp;<span class="hl-minus">T&nbsp;&nbsp;C&nbsp;&nbsp;A</span>
+<span class="lbl">revcomp:</span>&nbsp;<span class="hl-minus">T&nbsp;&nbsp;G&nbsp;&nbsp;A</span>&nbsp;&nbsp;G&nbsp;&nbsp;C&nbsp;&nbsp;C&nbsp;&nbsp;T&nbsp;&nbsp;T&nbsp;&nbsp;A&nbsp;&nbsp;A&nbsp;&nbsp;T&nbsp;&nbsp;G
+          </div>
+          <p><strong>Forward hit:</strong> in frame <code>+1</code> the codons are [1-3][4-6][7-9][10-12]; positions <span class="hl-plus">4&ndash;6</span> are <code>TAA</code> &rarr; a stop reported as <code>start=4, end=6, strand +</code>.</p>
+          <p><strong>Reverse hit:</strong> the reverse complement begins <code>TGA</code> &mdash; a stop. Those three bases are physically the last three of the top strand, so it is reported as <code>start=10, end=12, strand &minus;</code>. Internally: a reverse codon at revcomp offset <code>j</code> in a length-<code>L</code> sequence maps to <code>start = L&minus;2&minus;j</code>, <code>end = L&minus;j</code> (here <code>L=12, j=0</code>).</p>
+          <p>Note that frame <em>labels</em> are internally consistent but do not necessarily match how ORFfinder or EMBOSS <code>sixpack</code> number their frames.</p>
+        </div>
+      </details>
+
+      <details class="disclosure" id="learn-code">
+        <summary>Genetic codes vary across organisms</summary>
+        <div class="disclosure-body">
+          <p>The mapping from codons to amino acids and stops &mdash; the <strong>genetic code</strong> &mdash; is nearly universal but has documented exceptions catalogued by NCBI as numbered <strong>translation tables</strong>. Picking the right table is essential for a stop-codon tool because the exceptions change which codons stop. A few illustrative examples:</p>
+          <table class="def-table">
+            <thead><tr><th>Table</th><th>Used by</th><th>Stop codons</th></tr></thead>
+            <tbody>
+              <tr><td>1 &mdash; Standard</td><td>most nuclear genomes</td><td><code>TAA, TAG, TGA</code></td></tr>
+              <tr><td>2 &mdash; Vertebrate Mito.</td><td>vertebrate mitochondria</td><td><code>TAA, TAG, AGA, AGG</code></td></tr>
+              <tr><td>4 &mdash; Mold Mito. / Mycoplasma</td><td>Mycoplasma, some mito.</td><td><code>TAA, TAG</code> (<code>TGA</code>=Trp)</td></tr>
+              <tr><td>6 &mdash; Ciliate Nuclear</td><td>Tetrahymena, Paramecium</td><td><code>TGA</code> only</td></tr>
+              <tr><td>11 &mdash; Bacterial/Plastid</td><td>bacteria, archaea, plastids</td><td><code>TAA, TAG, TGA</code></td></tr>
+              <tr><td>22 &mdash; <em>Scenedesmus</em> Mito.</td><td>a green-alga mito.</td><td><code>TCA, TAA, TGA</code></td></tr>
+              <tr><td>23 &mdash; <em>Thraustochytrium</em></td><td>a stramenopile mito.</td><td><code>TTA, TAA, TAG, TGA</code></td></tr>
+            </tbody>
+          </table>
+          <p>A handful of codes (NCBI tables 27, 28, 31) have <strong>context-dependent / ambiguous</strong> stops &mdash; the same codon is sometimes read through as an amino acid. These cannot be resolved from sequence alone, so this tool surfaces them as ambiguous rather than silently calling them. The stop set for whichever table you select is always shown in the caption under the genetic-code menu.</p>
+        </div>
+      </details>
+
+      <details class="disclosure" id="learn-orf">
+        <summary>What is an ORF?</summary>
+        <div class="disclosure-body">
+          <p>An <strong>open reading frame (ORF)</strong> is a stretch of a single frame that can be translated without interruption. Two common definitions differ in whether a start codon is required:</p>
+          <ul>
+            <li><strong>Start-to-stop:</strong> from an initiation codon (usually <code>ATG</code>) to the next in-frame stop. This is what this tool predicts when you choose <em>Coding / predicted</em> with no annotation.</li>
+            <li><strong>Stop-to-stop:</strong> the maximal open stretch between two stops, with no start required &mdash; useful for finding coding potential regardless of the initiator.</li>
+          </ul>
+          <p><strong>Alternative starts.</strong> Besides <code>ATG</code>, many genomes initiate at <code>GTG</code> or <code>TTG</code> (and others, depending on the code). Matching NCBI ORFfinder and EMBOSS defaults, this tool uses <strong>ATG-only</strong> by default and lets you opt in to alternative start codons. One ORF is reported per terminating stop (the longest, 5&prime;-most start), and a minimum length filter removes spurious short ORFs.</p>
+        </div>
+      </details>
+
+      <details class="disclosure" id="learn-coords">
+        <summary>Coordinate conventions (and why BED differs)</summary>
+        <div class="disclosure-body">
+          <p>This tool reports positions as <strong>1-based, fully inclusive</strong>, on the <strong>forward (plus) strand for both strands</strong>, with <code>start &le; end</code> &mdash; the same convention as GFF3, GTF, GenBank, VCF and SAM. A 3&nbsp;bp codon at the 4th base spans positions <code>4&ndash;6</code>.</p>
+          <p><strong>BED is different.</strong> BED (and internal genome-browser/BAM coordinates) are <strong>0-based, half-open</strong> <code>[start, end)</code>. The same codon is BED <code>3 6</code>. Conversion is <code>chromStart = start &minus; 1</code>, <code>chromEnd = end</code>. This tool's BED export applies exactly that shift; CSV/JSON/GFF3 exports stay 1-based inclusive. Every hit keeps one stable ID across all export formats so rows can be cross-referenced.</p>
+          <p><strong>Stop codon in the CDS?</strong> GFF3/GenBank/RefSeq include the stop as the CDS's last 3&nbsp;bp; Ensembl GTF places it in a separate <code>stop_codon</code> feature. Terminator detection here tolerates both.</p>
+        </div>
+      </details>
+
+      <details class="disclosure" id="learn-context">
+        <summary>What the context classes mean (this tool's specialty)</summary>
+        <div class="disclosure-body">
+          <p>When you load an annotation (GFF3 or GenBank), every stop is classified by where it falls relative to genes &mdash; a layer most stop-codon tools do not offer:</p>
+          <div class="ctx-key">
+            <span class="ctx-key-item"><span class="ctx-badge ctx-cds-terminator">CDS terminator</span> the stop that ends a coding sequence &mdash; expected and normal.</span>
+          </div>
+          <div class="ctx-key">
+            <span class="ctx-key-item"><span class="ctx-badge ctx-cds-internal-inframe">In-frame internal</span> an in-frame stop <em>inside</em> a CDS &mdash; a readthrough / selenocysteine / frameshift / pseudogene / artifact candidate.</span>
+          </div>
+          <div class="ctx-key">
+            <span class="ctx-key-item"><span class="ctx-badge ctx-cds-recoded">Recoded</span> a stop known to be recoded (Sec/Pyl via <code>/transl_except</code>, or a per-CDS code) &mdash; not a premature stop.</span>
+          </div>
+          <div class="ctx-key">
+            <span class="ctx-key-item"><span class="ctx-badge ctx-cds-internal-outframe">Out-of-frame</span> a stop overlapping a CDS but in a different frame &mdash; usually not biologically relevant to that gene.</span>
+          </div>
+          <div class="ctx-key">
+            <span class="ctx-key-item"><span class="ctx-badge ctx-within-noncoding-gene">Non-coding gene</span> inside an annotated non-coding feature (e.g. rRNA/tRNA).</span>
+          </div>
+          <div class="ctx-key">
+            <span class="ctx-key-item"><span class="ctx-badge ctx-intergenic">Intergenic</span> between genes, in unannotated sequence.</span>
+          </div>
+          <div class="ctx-key">
+            <span class="ctx-key-item"><span class="ctx-badge ctx-orf-terminator">ORF terminator</span> ends a <em>predicted</em> ORF (when no annotation is loaded).</span>
+          </div>
+          <p>Terminator detection accepts both the stop-included (GFF3/GenBank) and stop-excluded (Ensembl GTF) conventions, and honours a per-feature <code>transl_table</code> when the annotation declares one consistently.</p>
+        </div>
+      </details>
+
+      <details class="disclosure" id="learn-glossary">
+        <summary>Glossary</summary>
+        <div class="disclosure-body">
+          <dl class="glossary">
+            <dt>Codon</dt><dd>Three consecutive nucleotides read as one unit during translation.</dd>
+            <dt>Stop codon</dt><dd>A codon that terminates translation (<code>TAA/TAG/TGA</code> in the standard code; varies by genetic code).</dd>
+            <dt>Reading frame</dt><dd>One of three ways to partition a strand into codons; six total across both strands.</dd>
+            <dt>Reverse complement</dt><dd>The opposite strand read 5&prime;&rarr;3&prime;: complement each base (A&harr;T, G&harr;C) and reverse the order.</dd>
+            <dt>ORF (open reading frame)</dt><dd>An uninterrupted, translatable stretch of one frame (start-to-stop or stop-to-stop).</dd>
+            <dt>CDS (coding sequence)</dt><dd>The portion of a gene annotated as protein-coding.</dd>
+            <dt>Genetic code / translation table</dt><dd>The codon&rarr;amino-acid/stop mapping; NCBI numbers the known variants.</dd>
+            <dt>Terminator</dt><dd>The stop codon that ends a CDS or ORF.</dd>
+            <dt>Premature / internal stop</dt><dd>An in-frame stop before the annotated end of a CDS.</dd>
+            <dt>Readthrough</dt><dd>Translation continuing past a stop codon, recoding it to an amino acid.</dd>
+            <dt>Selenocysteine (Sec) / Pyrrolysine (Pyl)</dt><dd>Amino acids inserted at recoded <code>TGA</code>/<code>TAG</code> codons, directed by context elements &mdash; not deducible from sequence alone.</dd>
+            <dt>Pseudogene</dt><dd>A gene-like sequence disrupted by mutations such as premature stops or frameshifts.</dd>
+            <dt>GC content</dt><dd>The percentage of bases that are G or C.</dd>
+            <dt>Ochre / amber / opal</dt><dd>Historical names for <code>TAA</code> / <code>TAG</code> / <code>TGA</code>.</dd>
+            <dt>IUPAC ambiguity code</dt><dd>A letter standing for several possible bases (e.g. <code>R</code> = A or G, <code>N</code> = any).</dd>
+          </dl>
+        </div>
+      </details>
+
+      <details class="disclosure" id="learn-methods">
+        <summary>Methods, how to cite &amp; limitations</summary>
+        <div class="disclosure-body">
+          <p><strong>Methods.</strong> Each sequence is scanned in all six reading frames for the stop codons of the selected NCBI translation table (derived from the table's amino-acid string, not hard-coded). Circular genomes are additionally scanned across the origin junction. With an annotation loaded, each stop is classified by its position relative to CDS/gene features; without one, ORFs can be predicted and their terminators reported. All computation runs locally in your browser &mdash; no sequence data is ever uploaded.</p>
+          <p><strong>Limitations.</strong></p>
+          <div class="limitations">
+            <ul>
+              <li><strong>Recoding cannot be called from sequence alone.</strong> In-frame internal stops are flagged as <em>candidates</em> for readthrough / selenocysteine / frameshift / pseudogene / artifact; only annotation (e.g. GenBank <code>/transl_except</code>) can confirm a genuine recoding.</li>
+              <li><strong>Circular ORFs are not joined across the origin.</strong> Origin-crossing stop <em>codons</em> are scanned, but predicted ORFs are not stitched across the origin.</li>
+              <li><strong>Ambiguity handling is conservative.</strong> A codon is called a stop only when every IUPAC resolution is a stop; ambiguous codons that could be a stop are surfaced as a warning, not called.</li>
+              <li><strong>Frame numbering</strong> is internally consistent but may not match other tools' labels.</li>
+              <li><strong>Background-tab throttling.</strong> Browsers slow timers in background tabs, so a scan may pause and resume when you switch away and back.</li>
+            </ul>
+          </div>
+          <p><strong>How to cite.</strong> This is an open, client-side utility; there is no associated publication. A suggested acknowledgement:</p>
+          <div class="cite-block">Stop Codon Finder (six-frame, annotation-aware stop-codon scanner). Genetic codes per NCBI translation tables. Accessed <span id="cite-date"></span>.</div>
+          <p>Underlying standards and references:</p>
+          <div class="ext-links">
+            <a href="https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi" target="_blank" rel="noopener">NCBI Genetic Codes</a>
+            <a href="https://github.com/The-Sequence-Ontology/Specifications/blob/master/gff3.md" target="_blank" rel="noopener">GFF3 spec</a>
+            <a href="https://genome.ucsc.edu/FAQ/FAQformat.html#format1" target="_blank" rel="noopener">UCSC BED format</a>
+            <a href="https://www.insdc.org/submitting-standards/feature-table/" target="_blank" rel="noopener">INSDC Feature Table</a>
+            <a href="https://www.bioinformatics.org/sms2/iupac.html" target="_blank" rel="noopener">IUPAC codes</a>
+          </div>
+        </div>
+      </details>
+    </section>
+
+  </main>
+
+  <footer>
+    <p>Everything runs locally in your browser &mdash; your sequence data is never uploaded or transmitted anywhere. See the <a href="README.md" target="_blank" rel="noopener">README</a> for biology &amp; coordinate conventions.</p>
+  </footer>
+
+</div>
+
+<div id="live-region" class="visually-hidden" aria-live="polite"></div>
+
+<script src="js/tables.js"></script>
+<script src="js/parser.js"></script>
+<script src="js/genbank.js"></script>
+<script src="js/gff.js"></script>
+<script src="js/input.js"></script>
+<script src="js/scanner.js"></script>
+<script src="js/annotate.js"></script>
+<script src="js/orf.js"></script>
+<script src="js/report.js"></script>
+<script src="js/export.js"></script>
+<script src="js/viz.js"></script>
+<script src="js/progress.js"></script>
+<script src="js/sample.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

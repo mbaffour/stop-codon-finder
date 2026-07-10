@@ -1,0 +1,69 @@
+<!--
+  Website integration snippet for the "Scientific tools" section of your site.
+
+  HOW TO USE:
+  1. Replace the two placeholder URLs below (TOOL_URL and BLOG_URL) with your
+     live GitHub Pages links once deployed, e.g.:
+        TOOL_URL = https://<you>.github.io/stop-codon-finder/
+        BLOG_URL = https://<you>.github.io/stop-codon-finder/blog.html
+  2. Paste the <article>…</article> block into your tools page. The styles are
+     scoped under .sct- classes so they won't collide with your site's CSS.
+     If your site already has its own card styling, you can drop the <style>
+     block and keep just the <article>.
+
+  A plain-text/Markdown fallback is at the very bottom of this file.
+-->
+
+<style>
+  .sct-card{--sct-accent:#0f9e8f;max-width:560px;border:1px solid #e3e7ec;border-radius:14px;
+    padding:20px 22px;background:#fff;font-family:inherit;color:#1c2430;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+  .sct-card *{box-sizing:border-box}
+  .sct-eyebrow{display:inline-flex;align-items:center;gap:7px;font-size:.72rem;font-weight:700;
+    letter-spacing:.04em;text-transform:uppercase;color:var(--sct-accent)}
+  .sct-title{font-size:1.28rem;margin:.35em 0 .25em;line-height:1.2}
+  .sct-desc{color:#5a6572;font-size:.98rem;line-height:1.55;margin:0 0 14px}
+  .sct-tags{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 16px;padding:0;list-style:none}
+  .sct-tags li{font-size:.74rem;color:#3a4753;background:#eef1f4;border-radius:999px;padding:3px 9px}
+  .sct-actions{display:flex;gap:10px;flex-wrap:wrap}
+  .sct-btn{display:inline-block;text-decoration:none;font-weight:700;font-size:.92rem;
+    padding:9px 16px;border-radius:9px;background:var(--sct-accent);color:#04211d}
+  .sct-btn.ghost{background:transparent;color:#1c2430;border:1px solid #e3e7ec;font-weight:600}
+  @media (prefers-color-scheme: dark){
+    .sct-card{background:#151c25;border-color:#26303b;color:#e6edf3;box-shadow:none}
+    .sct-desc{color:#9aa7b4}.sct-tags li{background:#26303b;color:#c7d0da}
+    .sct-btn.ghost{color:#e6edf3;border-color:#33404d}
+  }
+</style>
+
+<article class="sct-card">
+  <span class="sct-eyebrow">🧬 Bioinformatics · Web tool</span>
+  <h3 class="sct-title">Stop Codon Finder</h3>
+  <p class="sct-desc">Scan any genome for stop codons across all six reading frames, map each one to
+    its gene, and export to GFF3, BED, FASTA, CSV/JSON, or publication figures — free, in the
+    browser, with nothing uploaded. Supports FASTA, GenBank and GFF3, the full set of NCBI genetic
+    codes, and circular genomes.</p>
+  <ul class="sct-tags">
+    <li>Six-frame scan</li>
+    <li>Gene annotation</li>
+    <li>23 genetic codes</li>
+    <li>GFF3 / BED / FASTA export</li>
+    <li>100% client-side</li>
+  </ul>
+  <div class="sct-actions">
+    <a class="sct-btn" href="TOOL_URL">Open the tool</a>
+    <a class="sct-btn ghost" href="BLOG_URL">Guide &amp; how-to</a>
+  </div>
+</article>
+
+<!--
+  ── Plain Markdown fallback (for a Markdown-based site) ─────────────────────
+
+  ### 🧬 Stop Codon Finder
+
+  Scan any genome for stop codons across all six reading frames, map each one to
+  its gene, and export to GFF3, BED, FASTA, CSV/JSON, or publication figures —
+  free, in the browser, with nothing uploaded. Supports FASTA, GenBank and GFF3,
+  the full set of NCBI genetic codes, and circular genomes.
+
+  [Open the tool](TOOL_URL) · [Guide & how-to](BLOG_URL)
+-->

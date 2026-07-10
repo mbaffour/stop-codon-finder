@@ -1,0 +1,9 @@
+# Local test genomes (not part of the app; used only for local validation)
+testdata/
+
+# Editor / tooling
+.claude/
+.DS_Store
+Thumbs.db
+node_modules/
+*.log

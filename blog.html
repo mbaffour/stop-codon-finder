@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stop Codon Finder — a browser tool for finding & annotating stop codons</title>
+<meta name="description" content="How to find every stop codon in a genome, map it to its gene, and export it — free, in your browser, with nothing uploaded. A guide to the Stop Codon Finder.">
+<style>
+  :root{
+    --bg:#f7f8fa; --card:#ffffff; --ink:#1c2430; --muted:#5a6572; --line:#e3e7ec;
+    --accent:#0f9e8f; --accent-ink:#0b7f73; --link:#0b7f73; --code-bg:#eef1f4;
+    --taa:#8a6300; --tag:#a15c00; --tga:#0b7f73;
+    --maxw:760px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#0e1319; --card:#151c25; --ink:#e6edf3; --muted:#9aa7b4; --line:#26303b;
+      --accent:#2dd4bf; --accent-ink:#2dd4bf; --link:#5eead4; --code-bg:#0b1016;
+      --taa:#d9a441; --tag:#e8975a; --tga:#2dd4bf; }
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  a{color:var(--link);text-underline-offset:2px}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 20px}
+  header.hero{padding:56px 0 28px;border-bottom:1px solid var(--line);margin-bottom:8px}
+  .badge{display:inline-flex;align-items:center;gap:8px;font-size:.8rem;font-weight:600;
+    color:var(--accent-ink);background:color-mix(in srgb,var(--accent) 14%,transparent);
+    padding:5px 11px;border-radius:999px;letter-spacing:.02em}
+  h1{font-size:2.05rem;line-height:1.15;margin:.5em 0 .2em;letter-spacing:-.02em}
+  .sub{color:var(--muted);font-size:1.12rem;margin:0 0 22px}
+  .cta{display:inline-block;background:var(--accent);color:#04211d;font-weight:700;
+    text-decoration:none;padding:11px 20px;border-radius:10px;margin-right:10px}
+  @media (prefers-color-scheme: dark){.cta{color:#04211d}}
+  .cta.ghost{background:transparent;color:var(--ink);border:1px solid var(--line);font-weight:600}
+  main{padding:14px 0 60px}
+  h2{font-size:1.4rem;margin:2em 0 .5em;letter-spacing:-.01em}
+  h3{font-size:1.08rem;margin:1.5em 0 .35em}
+  p,li{color:var(--ink)}
+  .muted{color:var(--muted)}
+  code,kbd{background:var(--code-bg);border-radius:5px;padding:.12em .4em;font-size:.9em;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  pre{background:var(--code-bg);border:1px solid var(--line);border-radius:10px;
+    padding:14px 16px;overflow-x:auto;font-size:.86rem;line-height:1.5}
+  pre code{background:none;padding:0}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin:18px 0}
+  ol.steps{counter-reset:s;list-style:none;padding:0;margin:16px 0}
+  ol.steps>li{counter-increment:s;position:relative;padding:2px 0 16px 44px;margin:0}
+  ol.steps>li::before{content:counter(s);position:absolute;left:0;top:0;width:30px;height:30px;
+    display:grid;place-items:center;border-radius:50%;background:var(--accent);color:#04211d;
+    font-weight:700;font-size:.95rem}
+  ol.steps>li strong{display:block}
+  .codons b.taa{color:var(--taa)} .codons b.tag{color:var(--tag)} .codons b.tga{color:var(--tga)}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:.93rem}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:600}
+  footer{border-top:1px solid var(--line);padding:24px 0 60px;color:var(--muted);font-size:.9rem}
+  .toc a{display:inline-block;margin:0 14px 6px 0;color:var(--muted);text-decoration:none;font-size:.92rem}
+  .toc a:hover{color:var(--link)}
+  hr{border:none;border-top:1px solid var(--line);margin:34px 0}
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <span class="badge">🧬 Scientific tools · Stop Codon Finder</span>
+    <h1>Find every stop codon in a genome — and the gene it belongs to — in your browser</h1>
+    <p class="sub">A free, open-source tool that scans DNA in all six reading frames, maps each
+      stop codon to its gene, and exports the result to the formats your pipeline already speaks.
+      No account, no upload, nothing leaves your machine.</p>
+    <a class="cta" href="index.html">Open the tool →</a>
+    <a class="cta ghost" href="#use">How to use it</a>
+    <p class="toc" style="margin-top:22px">
+      <a href="#what">What it does</a>
+      <a href="#why">Why it's different</a>
+      <a href="#use">How to use it</a>
+      <a href="#science">The science, briefly</a>
+      <a href="#export">Exports</a>
+      <a href="#host">Host your own copy</a>
+      <a href="#privacy">Privacy &amp; access</a>
+    </p>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section id="what">
+    <h2>What it does</h2>
+    <p>A <strong>stop codon</strong> is the three-letter signal that tells the ribosome to end a
+      protein. In the standard code there are three of them —
+      <span class="codons"><b class="taa">TAA</b> (ochre), <b class="tag">TAG</b> (amber),
+      <b class="tga">TGA</b> (opal)</span> — though some organisms use a different set. The
+      <strong>Stop Codon Finder</strong> reads a DNA sequence and reports <em>every</em> stop codon
+      in <em>all six reading frames</em> (three forward, three reverse), with exact coordinates.</p>
+    <p>Drop in a plain <strong>FASTA</strong> sequence and you get the full six-frame catalogue.
+      Drop in an <strong>annotated</strong> genome — a <strong>GenBank</strong> file, a
+      <strong>GFF3</strong>, or a FASTA + GFF3 pair — and it goes further: it tells you, for each
+      stop codon, <em>which gene it lands in</em> and <em>what role it plays</em>.</p>
+  </section>
+
+  <section id="why">
+    <h2>Why it's different</h2>
+    <p>Plenty of tools list open reading frames (NCBI ORFfinder, EMBOSS, ExPASy Translate, the
+      Sequence Manipulation Suite). What none of the free ones do is put each stop codon
+      <strong>in the context of a genome annotation</strong>. This tool classifies every hit:</p>
+    <table>
+      <tr><th>Context</th><th>What it means</th></tr>
+      <tr><td><code>cds-terminator</code></td><td>The stop that properly ends a gene.</td></tr>
+      <tr><td><code>cds-internal-inframe</code></td><td>An in-frame stop <em>inside</em> a gene — a candidate for readthrough, selenocysteine (Sec), a programmed frameshift, a pseudogene, or a sequencing error.</td></tr>
+      <tr><td><code>cds-internal-outframe</code></td><td>A stop inside a gene but in a different frame.</td></tr>
+      <tr><td><code>intergenic</code></td><td>Outside any annotated feature.</td></tr>
+    </table>
+    <p>On top of that it handles things most web tools skip: <strong>circular genomes</strong>
+      (stop codons that straddle the origin of a phage or plasmid), the full set of
+      <strong>NCBI genetic-code tables</strong> (so <code>TGA</code> is correctly read as
+      tryptophan in <em>Mycoplasma</em>, or <code>TCA</code>/<code>TTA</code> as stops in the codes
+      that use them), IUPAC <strong>ambiguity codes</strong>, and a
+      <strong>sanity check</strong> that warns you when the genetic code you picked looks wrong for
+      your data.</p>
+  </section>
+
+  <section id="use">
+    <h2>How to use it</h2>
+    <ol class="steps">
+      <li><strong>Load your sequence</strong>
+        Drag a file onto the drop zone or click <em>Choose File(s)</em>. Accepted: FASTA
+        (<code>.fasta/.fa/.fna</code>), GenBank (<code>.gb/.gbk</code>), GFF3
+        (<code>.gff3</code>), or a FASTA + GFF3 pair. No file handy? Pick a bundled example from
+        <em>Load example</em> — including a real Lambda phage genome.</li>
+      <li><strong>Check the settings (optional)</strong>
+        The tool auto-detects the genetic code and turns on annotation-aware mode when it finds
+        features. You can override the <em>genetic code / translation table</em>, <em>indicate your
+        organism</em>, or switch between <em>all stop codons</em> and <em>coding/predicted</em>
+        mode.</li>
+      <li><strong>Run the scan</strong>
+        Click <em>Run scan</em>. A progress bar shows real throughput and an estimated time
+        remaining — even multi-megabase genomes stay responsive.</li>
+      <li><strong>Read the results</strong>
+        You get summary stats (counts per codon, frame and strand, GC%, density), a
+        <em>six-frame map</em> and <em>density plot</em>, a <em>per-gene summary</em>, and a
+        sortable, filterable table of every hit with its gene and context.</li>
+      <li><strong>Export</strong>
+        Download <strong>CSV</strong>, <strong>JSON</strong>, <strong>GFF3</strong>,
+        <strong>BED</strong>, <strong>FASTA</strong> of ORFs/proteins, or the charts as
+        <strong>SVG/PNG</strong>. Every hit keeps one stable ID across all formats, so the files
+        cross-reference cleanly and drop straight into IGV or a genome browser.</li>
+    </ol>
+    <p class="muted">Tip: keep the tab focused for very large genomes — browsers slow down
+      background tabs, though your results are never affected.</p>
+  </section>
+
+  <section id="science">
+    <h2>The science, briefly</h2>
+    <h3>Six reading frames</h3>
+    <p>DNA is double-stranded, so a sequence can be read six ways: forward frames +1/+2/+3 (starting
+      at the 1st, 2nd, or 3rd base), and reverse frames −1/−2/−3 (the same, on the reverse
+      complement). A stop codon in any of these frames is reported.</p>
+    <h3>Coordinates you can trust</h3>
+    <p>Every hit is reported in <strong>1-based, inclusive</strong> coordinates on the
+      <strong>forward strand</strong> — the same convention as GFF3 and GenBank — so a start/end pair
+      always points at the exact bases in your file, whichever strand the codon was found on. The
+      BED export converts to the 0-based, half-open convention that format expects; the app spells
+      out the difference so nothing is ambiguous.</p>
+    <h3>Not every in-frame stop is a mistake</h3>
+    <p>A stop codon inside a gene isn't always an error. It can be recoded — selenocysteine reads
+      through <code>TGA</code>, and some genes use programmed frameshifts. These can't be proven
+      from sequence alone, so the tool <em>flags</em> them as candidates rather than calling them
+      broken — and honors GenBank <code>/transl_except</code> so real Sec/Pyl recodings aren't
+      mislabeled.</p>
+  </section>
+
+  <section id="export">
+    <h2>Exports at a glance</h2>
+    <table>
+      <tr><th>Format</th><th>Best for</th></tr>
+      <tr><td>CSV / JSON</td><td>Spreadsheets, scripts, a full machine-readable record (JSON keeps provenance).</td></tr>
+      <tr><td>GFF3</td><td>Loading stops as features into IGV, JBrowse, or any genome browser.</td></tr>
+      <tr><td>BED</td><td>UCSC-style tracks and bedtools workflows (0-based half-open).</td></tr>
+      <tr><td>FASTA (.fna / .faa)</td><td>Extracted ORF nucleotides and translated proteins.</td></tr>
+      <tr><td>SVG / PNG</td><td>Publication-ready or slide-ready figures of the charts.</td></tr>
+    </table>
+  </section>
+
+  <section id="host">
+    <h2>Host your own copy (free, in minutes)</h2>
+    <p>The whole tool is static files — no server, no build. The easiest home is
+      <strong>GitHub Pages</strong>:</p>
+    <ol class="steps">
+      <li><strong>Put the files in a repo</strong>
+        Create a repository (e.g. <code>stop-codon-finder</code>) and add the project files
+        (<code>index.html</code>, <code>css/</code>, <code>js/</code>, <code>blog.html</code>).</li>
+      <li><strong>Push it</strong>
+        <pre><code>git add .
+git commit -m "Stop Codon Finder"
+git branch -M main
+git remote add origin https://github.com/&lt;you&gt;/stop-codon-finder.git
+git push -u origin main</code></pre></li>
+      <li><strong>Turn on Pages</strong>
+        In the repo, go to <em>Settings → Pages</em>, set <em>Source</em> to <em>Deploy from a
+        branch</em>, choose <code>main</code> and <code>/ (root)</code>, and save.</li>
+      <li><strong>Share the link</strong>
+        Your tool goes live at <code>https://&lt;you&gt;.github.io/stop-codon-finder/</code>, and
+        this guide at <code>…/blog.html</code>.</li>
+    </ol>
+    <p class="muted">You can also just double-click <code>index.html</code> to run it straight from
+      your computer, offline.</p>
+  </section>
+
+  <section id="privacy">
+    <h2>Privacy &amp; accessibility</h2>
+    <p><strong>Your data stays on your machine.</strong> Files are read locally in the browser and
+      no network request is made after the page loads — you can verify this in the browser's Network
+      tab. That matters for unpublished sequences.</p>
+    <p>The interface works in light and dark themes, meets WCAG AA contrast, is keyboard-operable,
+      uses a colorblind-safe codon palette, and ships with a built-in <em>Learn</em> section,
+      glossary, and inline help so it's approachable for students and rigorous enough for
+      researchers.</p>
+    <p style="margin-top:22px"><a class="cta" href="index.html">Open the Stop Codon Finder →</a></p>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>Stop Codon Finder is free and open source under the MIT license. Built for teaching and
+      research. Coordinates follow GFF3/GenBank conventions (1-based, inclusive); genetic codes
+      follow the NCBI translation tables.</p>
+  </div>
+</footer>
+</body>
+</html>
