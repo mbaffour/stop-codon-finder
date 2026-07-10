@@ -451,11 +451,13 @@
     state.tableUserSet = false;
     state.modeUserSet = false;
     state.activeTableId = DEFAULT_TABLE_ID;
-    // Default to showing EVERY stop codon in all six frames — the tool's core
-    // job. "Coding / predicted" (terminators only) is one click away. Defaulting
-    // to coding on annotated genomes surprised users (e.g. a 70 kb phage showed
-    // ~98 terminators instead of its ~8,400 stops).
-    state.mode = 'all';
+    // Default to the coding view (the real gene-terminating stops — one per CDS)
+    // whenever the input carries CDS annotation: that is what most users open an
+    // annotated genome to see, and the ±8,400 six-frame chance triplets bury it.
+    // With no annotation there is nothing to terminate, so default to showing
+    // EVERY stop codon in all six frames. The "All stop codons" toggle is always
+    // one click away.
+    state.mode = state.hasCDS ? 'coding' : 'all';
 
     // Fresh load clears the manual organism (a new file should re-detect).
     state.userOrganism = '';
@@ -941,7 +943,7 @@
     cards.push({ label: 'Total length', value: fmtInt(s.totalLength) + ' bp' });
     cards.push({ label: 'GC content', value: s.gcPercent.toFixed(1) + '%' });
     cards.push({
-      label: state.mode === 'coding' ? 'Coding stop codons' : 'Total stop codons',
+      label: state.mode === 'coding' ? 'Gene-terminating stops' : 'Total stop codons',
       value: fmtInt(s.totalStops), hero: true
     });
 
@@ -1046,6 +1048,15 @@
   function renderStopTotals() {
     var el = $('totals-chart');
     if (!el || !state.summary) return;
+    // Keep the card intro honest about WHAT is being counted in the active mode:
+    // gene-terminating stops (one per CDS/ORF) vs every six-frame chance triplet.
+    var intro = $('totals-intro');
+    if (intro) {
+      intro.textContent = state.mode === 'coding'
+        ? 'How many of each stop codon actually terminate a gene — the one real terminating stop per CDS' +
+          (state.annotationActive && !state.hasCDS ? '/predicted ORF' : '') + ', not the six-frame chance triplets.'
+        : 'How many of each stop codon are present, counted across the whole genome (all six reading frames).';
+    }
     var stops = activeStops();
     var by = state.summary.byCodon || {};
     var counts = stops.map(function (c) { return by[c] || 0; });

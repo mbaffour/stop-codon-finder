@@ -3,8 +3,14 @@
  *
  * Exposes a global `CodonAnnotate`:
  *   CodonAnnotate.buildIndex(features) -> index
+ *   CodonAnnotate.assignTerminators(hits, features, ctx) -> Map<hit,feature>
  *   CodonAnnotate.annotate(hits, features, options) -> Promise<void>  // mutates hits
- *   CodonAnnotate.classifyHit(hit, index) -> {context,...}            // synchronous helper
+ *   CodonAnnotate.classifyHit(hit, index, strict, ctx, termMap) -> {context,...}
+ *
+ * cds-terminator / orf-terminator are assigned by assignTerminators (a
+ * CDS/ORF-driven pass where each feature claims exactly ONE 3'-terminal stop),
+ * NOT by a per-hit ±3 tolerance test; classifyHit reads that map. This keeps the
+ * terminator count equal to the number of distinct true CDS terminators.
  *
  * The index is an augmented interval index: per (seqId,strand) an array of
  * segments sorted by start, plus a prefix-max of segment ends (maxEndPrefix)
@@ -257,23 +263,136 @@
     return spanOf(a) <= spanOf(b) ? a : b;
   }
 
-  function classifyHit(hit, index, strict, ctx) {
-    var group = index.groups[keyOf(hit.seqId, hit.strand)];
+  // ---- CDS/ORF-driven terminator assignment ----------------------------
+  // The authoritative terminator pass. Instead of the old per-hit ±3 tolerance
+  // test (which mislabelled coincidental stops sitting 1-3 nt from a gene end as
+  // extra "terminators" in compact/AT-rich genomes), each CDS/ORF claims EXACTLY
+  // ONE hit: the stop codon at its true 3' end. A CDS's terminator is either
+  //   (a) stop-INCLUDED  -- the CDS's own last codon is an in-frame stop under
+  //       the feature's genetic code (GenBank/RefSeq/GFF3 convention), or
+  //   (b) stop-EXCLUDED  -- if (a) does not hold, the codon immediately 3' of
+  //       the CDS is a stop (Ensembl GTF convention).
+  // (a) is tried first, so a tandem stop in the very next codon of a
+  // stop-INCLUDED CDS is never mis-claimed as a second terminator. A hit that is
+  // merely NEAR a boundary but is not a CDS's actual terminating stop is left to
+  // its real context (cds-internal-*/intergenic/...). Genuine co-terminal genes
+  // that share one stop are preserved: several CDS may claim the same hit (it is
+  // still a single terminator hit). Returns a Map: hit -> ARRAY of every CDS/ORF
+  // feature that hit terminates (usually one; more than one ONLY for genuine
+  // co-terminal shared-stop genes, e.g. phiX174 A/A*, lambda S105/S107) so the
+  // per-gene summary can credit each co-terminal gene. Keys use a plain space
+  // delimiter (never a NUL/control byte); real seqIds contain no spaces.
+  // O(hits + features) with two coordinate hash indexes, so it scales to
+  // multi-Mb genomes (E. coli ~9k features / ~360k hits).
+  function assignTerminators(hits, features, ctx) {
+    var termMap = new Map();
+    if (!hits || !hits.length || !features || !features.length) return termMap;
+
+    // Index hits by the forward coordinate of their biological 3' base (the
+    // stop-INCLUDED anchor: `end` on '+', `start` on '-') and by the coordinate
+    // a CDS 3' terminus would carry if this hit sat immediately after it (the
+    // stop-EXCLUDED anchor: `start-1` on '+', `end+1` on '-'). Wrap hits (end <
+    // start, origin-crossing) index by their wrapped coords just the same.
+    var inclMap = {}, exclMap = {};
+    function push(map, key, h) { (map[key] || (map[key] = [])).push(h); }
+    for (var i = 0; i < hits.length; i++) {
+      var h = hits[i];
+      var base = h.seqId + ' ' + h.strand + ' ';
+      if (h.strand === '-') {
+        push(inclMap, base + h.start, h);
+        push(exclMap, base + (h.end + 1), h);
+      } else {
+        push(inclMap, base + h.end, h);
+        push(exclMap, base + (h.start - 1), h);
+      }
+    }
+
+    for (var f = 0; f < features.length; f++) {
+      var feat = features[f];
+      if (feat.type !== 'CDS' && feat.type !== 'ORF') continue;
+      var T = getOrdered(feat).three; // forward coord of the 3'-terminal base
+      var keyBase = feat.seqId + ' ' + feat.strand + ' ';
+      var chosen = null;
+
+      // (a) stop-INCLUDED: the CDS's last codon is itself the terminating stop.
+      var inclCands = inclMap[keyBase + T];
+      if (inclCands) {
+        for (var a = 0; a < inclCands.length; a++) {
+          var hi = inclCands[a];
+          if (feat.type === 'CDS' && !isStopInFeature(feat, hi.codon, ctx)) continue;
+          if (!inReadingFrame(feat, hi.start, hi.end)) continue;
+          chosen = hi; break;
+        }
+      }
+      // (b) stop-EXCLUDED: terminator is the codon immediately 3' of the CDS.
+      if (!chosen) {
+        var exclCands = exclMap[keyBase + T];
+        if (exclCands) {
+          for (var b = 0; b < exclCands.length; b++) {
+            var he = exclCands[b];
+            if (feat.type === 'CDS' && !isStopInFeature(feat, he.codon, ctx)) continue;
+            chosen = he; break;
+          }
+        }
+      }
+      if (chosen) {
+        var arr = termMap.get(chosen);
+        if (arr) arr.push(feat); else termMap.set(chosen, [feat]);
+      }
+    }
+    return termMap;
+  }
+
+  function classifyHit(hit, index, strict, ctx, termMap) {
     var hs = hit.start, he = hit.end;
     var result = {
       context: 'intergenic',
       geneName: null, locusTag: null, product: null, featureId: null, inFrame: null,
-      recodingCandidate: false, recodedAA: null
+      recodingCandidate: false, recodedAA: null, terminatorFeatureIds: null
     };
+
+    // Precedence 1: terminator, resolved by the CDS/ORF-driven assignment
+    // (assignTerminators) instead of a per-hit ±3 test. When a termMap is
+    // supplied (always, from annotate) it is AUTHORITATIVE: this hit is a
+    // terminator iff one—or several co-terminal—CDS/ORF claimed it as the stop
+    // at their true 3' end; otherwise it is NOT a terminator and falls through
+    // to its real context below. The legacy per-hit ±3 test further down runs
+    // only for standalone classifyHit callers that pass no termMap.
+    if (termMap) {
+      var claimants = termMap.get(hit);
+      if (claimants && claimants.length) {
+        // Name the hit after the most specific claiming feature.
+        var tf = claimants[0];
+        for (var ci = 1; ci < claimants.length; ci++) tf = moreSpecific(claimants[ci], tf);
+        result.context = (tf.type === 'ORF') ? 'orf-terminator' : 'cds-terminator';
+        applyName(result, tf);
+        result.inFrame = true;
+        // Genuine CO-TERMINAL genes share ONE stop codon (one terminator hit).
+        // Record every CDS/ORF this single hit terminates so the per-gene summary
+        // credits each of them; the common single-claimant case keeps just
+        // featureId (terminatorFeatureIds stays null).
+        if (claimants.length > 1) {
+          var ids = [];
+          for (var cj = 0; cj < claimants.length; cj++) {
+            var fid = claimants[cj].id || claimants[cj].locusTag || claimants[cj].name;
+            if (fid != null && ids.indexOf(fid) === -1) ids.push(fid);
+          }
+          if (ids.length > 1) result.terminatorFeatureIds = ids;
+        }
+        return result;
+      }
+    }
+
+    var group = index.groups[keyOf(hit.seqId, hit.strand)];
     if (!group) return result;
 
     // Origin-wrapping hit (found by the circular scanner): its forward span
     // crosses the origin, so he < hs. Handle it separately -- the normal
     // interval query assumes hs <= he.
-    if (he < hs) return classifyWrapHit(hit, group, strict, result, ctx);
+    if (he < hs) return classifyWrapHit(hit, group, strict, result, ctx, termMap);
 
-    // Expand the query a little so stop-excluded / ±3 terminators (which sit
-    // just outside the CDS) are still discovered.
+    // Expand the query a little so stop-excluded / adjacent terminators (which
+    // sit just outside the CDS) are still discovered.
     var pad = strict ? 1 : 4;
     var segs = querySegments(group, hs - pad, he + pad);
     if (!segs.length) return result;
@@ -287,27 +406,30 @@
       if (!seen[fid]) { seen[fid] = 1; featSet.push(f); }
     }
 
-    // Precedence 1: terminator (CDS or ORF). Among features whose terminator
-    // window the hit falls in, pick the CLOSEST (smallest coordinate distance),
-    // breaking ties by specificity. This stops a neighbouring overlapping gene
-    // from stealing another gene's terminator via the ±3 tolerance.
-    var termFeat = null, termIsOrf = false, termBest = Infinity;
-    for (var t = 0; t < featSet.length; t++) {
-      var ft = featSet[t];
-      if (ft.type !== 'CDS' && ft.type !== 'ORF') continue;
-      // A hit only terminates a CDS if it is actually a stop in THAT feature's
-      // genetic code (e.g. TGA is Trp, not a stop, in a transl_table=4 CDS).
-      if (ft.type === 'CDS' && !isStopInFeature(ft, hit.codon, ctx)) continue;
-      var d = terminatorDist(ft, hs, he, strict);
-      if (d < 0) continue;
-      var better = (!termFeat) || (d < termBest) || (d === termBest && moreSpecific(ft, termFeat) === ft);
-      if (better) { termBest = d; termFeat = ft; termIsOrf = (ft.type === 'ORF'); }
-    }
-    if (termFeat) {
-      result.context = termIsOrf ? 'orf-terminator' : 'cds-terminator';
-      applyName(result, termFeat);
-      result.inFrame = true;
-      return result;
+    // Legacy per-hit terminator test: ONLY for standalone callers that passed no
+    // termMap. The annotate() pipeline always passes one (handled above), so
+    // this ±3 fallback never runs there and cannot reintroduce the tolerance
+    // artifacts it once produced. Among features whose terminator window the hit
+    // falls in, pick the CLOSEST, breaking ties by specificity.
+    if (!termMap) {
+      var termFeat = null, termIsOrf = false, termBest = Infinity;
+      for (var t = 0; t < featSet.length; t++) {
+        var ft = featSet[t];
+        if (ft.type !== 'CDS' && ft.type !== 'ORF') continue;
+        // A hit only terminates a CDS if it is actually a stop in THAT feature's
+        // genetic code (e.g. TGA is Trp, not a stop, in a transl_table=4 CDS).
+        if (ft.type === 'CDS' && !isStopInFeature(ft, hit.codon, ctx)) continue;
+        var d = terminatorDist(ft, hs, he, strict);
+        if (d < 0) continue;
+        var better = (!termFeat) || (d < termBest) || (d === termBest && moreSpecific(ft, termFeat) === ft);
+        if (better) { termBest = d; termFeat = ft; termIsOrf = (ft.type === 'ORF'); }
+      }
+      if (termFeat) {
+        result.context = termIsOrf ? 'orf-terminator' : 'cds-terminator';
+        applyName(result, termFeat);
+        result.inFrame = true;
+        return result;
+      }
     }
 
     // For internal/non-coding tests, restrict to features that actually overlap.
@@ -377,7 +499,12 @@
   // the junction codon; otherwise leave it intergenic. The essential fix is
   // upstream (the circular scanner now *finds* this codon instead of dropping
   // it); precise junction annotation is secondary.
-  function classifyWrapHit(hit, group, strict, result, ctx) {
+  function classifyWrapHit(hit, group, strict, result, ctx, termMap) {
+    // With a termMap, terminator status was already decided authoritatively by
+    // the CDS/ORF-driven assignment (checked in classifyHit before we arrive
+    // here). A wrap hit reaching this point was not claimed by any CDS/ORF, so
+    // it is intergenic — do NOT re-run a ±3 terminator test on it.
+    if (termMap) return result;
     var hs = hit.start, he = hit.end;
     var BIG = 1e15;
     var segs = querySegments(group, hs, BIG).concat(querySegments(group, 0, he));
@@ -445,6 +572,11 @@
       try {
         var index = buildIndex(features);
         hits = hits || [];
+        // One authoritative CDS/ORF-driven terminator pass up front: each CDS/ORF
+        // claims its single true 3'-terminal stop (see assignTerminators). The
+        // per-hit classification below just reads this map, so terminators are
+        // exact and never over-counted by boundary-adjacent coincidental stops.
+        var termMap = assignTerminators(hits, features, ctx);
         var i = 0;
         var total = hits.length;
 
@@ -453,7 +585,7 @@
           var end = Math.min(i + chunk, total);
           for (; i < end; i++) {
             var h = hits[i];
-            var c = classifyHit(h, index, strict, ctx);
+            var c = classifyHit(h, index, strict, ctx, termMap);
             h.context = c.context;
             h.geneName = c.geneName;
             h.locusTag = c.locusTag;
@@ -462,6 +594,9 @@
             h.inFrame = c.inFrame;
             h.recodingCandidate = c.recodingCandidate;
             h.recodedAA = c.recodedAA;
+            // Only co-terminal terminator hits carry this (shared stop -> several
+            // CDS); leave every other hit's shape unchanged (no new export field).
+            if (c.terminatorFeatureIds) h.terminatorFeatureIds = c.terminatorFeatureIds;
           }
           onProgress({ done: i, total: total });
           if (i >= total) { resolve(); return; }
@@ -478,6 +613,7 @@
   global.CodonAnnotate = {
     buildIndex: buildIndex,
     querySegments: querySegments,
+    assignTerminators: assignTerminators,
     classifyHit: classifyHit,
     annotate: annotate
   };

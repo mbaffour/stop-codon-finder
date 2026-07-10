@@ -116,13 +116,23 @@
 
     for (var h = 0; h < hits.length; h++) {
       var hit = hits[h];
-      if (hit.featureId == null) continue;
-      var row2 = byId[hit.featureId];
-      if (!row2) continue;
       if (hit.context === 'cds-internal-inframe') {
-        row2.internalStops++;
+        if (hit.featureId == null) continue;
+        var rowI = byId[hit.featureId];
+        if (rowI) rowI.internalStops++;
       } else if (hit.context === 'cds-terminator') {
-        row2.terminatorCodon = hit.codon;
+        // A single terminator hit can terminate SEVERAL co-terminal CDS that
+        // genuinely share one stop codon (e.g. phiX174 A/A*, lambda S105/S107);
+        // annotate records every one on hit.terminatorFeatureIds. Credit them
+        // all so no co-terminal gene shows a false "no stop". Common case: the
+        // hit has a single featureId and terminatorFeatureIds is absent.
+        var termIds = hit.terminatorFeatureIds ||
+          (hit.featureId != null ? [hit.featureId] : null);
+        if (!termIds) continue;
+        for (var ti = 0; ti < termIds.length; ti++) {
+          var rowT = byId[termIds[ti]];
+          if (rowT) rowT.terminatorCodon = hit.codon;
+        }
       }
     }
 
