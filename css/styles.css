@@ -308,11 +308,18 @@ section.card {
   padding: 22px;
   box-shadow: var(--shadow);
   transition: transform .18s ease, box-shadow .18s ease, border-color .12s ease;
-  will-change: transform;
 }
 section.card:hover {
   transform: translateY(-2px);
   box-shadow: 0 2px 4px rgba(16,24,32,.06), 0 14px 34px rgba(16,24,32,.10);
+}
+/* When a card holds an OPEN custom dropdown (e.g. "Load example"), lift the
+   whole card above later sections so the menu is never covered. The hover-lift
+   transform above turns each card into a stacking context, which would
+   otherwise trap the menu's z-index inside the card. */
+section.card:has(.menu-list:not([hidden])) {
+  position: relative;
+  z-index: 30;
 }
 
 #results-section { display: flex; flex-direction: column; gap: 24px; }
