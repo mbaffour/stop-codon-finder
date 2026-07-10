@@ -197,8 +197,12 @@ order — deliberately, so the app works identically via `file://` and `https://
 - **Background-tab caveat:** browsers throttle CPU-bound main-thread work in tabs
   hidden for a while, so a large scan left in a background tab slows down until you
   return. Results are unaffected — only speed.
-- The bundled real Lambda example adds ~178 KB to the page; remove it from
-  `js/sample.js` if you prefer a lighter download.
+- Bundled real-genome examples (Lambda, phage N4, phiX174, MS2, human
+  mitochondrion — spanning circular/linear, alternative genetic codes, and
+  overlapping genes) add ~440 KB to the page; trim any from `js/sample.js` if
+  you prefer a lighter download. The tool is validated across 12 diverse
+  genomes (NCBI translation tables 1/2/4/11; phage/bacterium/virus/organelle/
+  eukaryote).
 - Recoding (selenocysteine, readthrough, frameshifts) **cannot be called from
   sequence alone** — the app flags candidates rather than asserting them. ORFs are
   not joined across a circular origin. Genetic code is applied globally (mixed

@@ -285,6 +285,14 @@
       objs = [{ name: global.SAMPLE_GENBANK_FILENAME, text: global.SAMPLE_GENBANK_TEXT, size: global.SAMPLE_GENBANK_TEXT.length }];
     } else if (kind === 'lambda') {
       objs = [{ name: global.SAMPLE_LAMBDA_FILENAME, text: global.SAMPLE_LAMBDA_TEXT, size: global.SAMPLE_LAMBDA_TEXT.length }];
+    } else if (kind === 'phix') {
+      objs = [{ name: global.SAMPLE_PHIX_FILENAME, text: global.SAMPLE_PHIX_TEXT, size: global.SAMPLE_PHIX_TEXT.length }];
+    } else if (kind === 'ms2') {
+      objs = [{ name: global.SAMPLE_MS2_FILENAME, text: global.SAMPLE_MS2_TEXT, size: global.SAMPLE_MS2_TEXT.length }];
+    } else if (kind === 'mito') {
+      objs = [{ name: global.SAMPLE_MITO_FILENAME, text: global.SAMPLE_MITO_TEXT, size: global.SAMPLE_MITO_TEXT.length }];
+    } else if (kind === 'n4') {
+      objs = [{ name: global.SAMPLE_N4_FILENAME, text: global.SAMPLE_N4_TEXT, size: global.SAMPLE_N4_TEXT.length }];
     }
     // Examples replace whatever is loaded.
     state.files = [];
