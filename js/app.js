@@ -52,6 +52,7 @@
     modeUserSet: false,
     minOrfCodons: 30,
     altStarts: false,
+    requireStart: true,   // ORF definition: true = start-to-stop (default), false = stop-to-stop
     hits: [],
     displayHits: [],
     summary: null,
@@ -621,6 +622,7 @@
     // Mode segmented control
     updateModeUI();
     updateMinOrfVisibility();
+    updateOrfModeUI();
     updateSettingsSummary();
 
     // Min-ORF values
@@ -655,6 +657,25 @@
     $('minorf-setting').hidden = !(state.mode === 'coding' && !state.hasCDS);
   }
 
+  // Reflect the ORF-definition choice: select value, the stop-to-stop
+  // disclaimer, and de-emphasise the (now irrelevant) alt-starts control.
+  function updateOrfModeUI() {
+    var stopToStop = state.requireStart === false;
+    var sel = $('orf-mode-select');
+    if (sel) sel.value = stopToStop ? 'stop' : 'start';
+    var disc = $('orf-mode-disclaimer');
+    if (disc) disc.hidden = !stopToStop;
+    var note = $('altstarts-ignored-note');
+    if (note) note.hidden = !stopToStop;
+    var wrap = $('altstarts-wrap');
+    var altInput = $('alt-starts-toggle');
+    if (altInput) altInput.disabled = stopToStop;
+    if (wrap) {
+      if (stopToStop) wrap.classList.add('is-disabled');
+      else wrap.classList.remove('is-disabled');
+    }
+  }
+
   function updateSettingsSummary() {
     var parts = [];
     parts.push(state.mode === 'coding' ? 'Scanning coding stops only' : 'Scanning all stop codons');
@@ -665,7 +686,8 @@
       tail = cds > 0 ? ('from annotation — ' + fmtInt(cds) + ' CDS feature' + (cds === 1 ? '' : 's'))
                      : ('from annotation — ' + fmtInt(state.features.length) + ' feature(s)');
     } else if (state.mode === 'coding') {
-      tail = 'predicting ORFs (min ' + state.minOrfCodons + ' codons)';
+      var orfKind = state.requireStart === false ? 'stop-to-stop' : 'start-to-stop';
+      tail = 'predicting ' + orfKind + ' ORFs (min ' + state.minOrfCodons + ' codons)';
     } else {
       tail = 'no annotation loaded';
     }
@@ -739,8 +761,11 @@
         var orf = global.CodonORF.predict(state.records, hits, {
           tableId: tableId,
           minLenNt: Math.max(1, state.minOrfCodons) * 3,
-          requireStart: true,
-          // ATG-only by default (ORFfinder/EMBOSS); alt starts are opt-in.
+          // ORF definition: start-to-stop (needs an initiator) vs stop-to-stop
+          // (every open reading frame). Minimum length filters both.
+          requireStart: state.requireStart !== false,
+          // ATG-only by default (ORFfinder/EMBOSS); alt starts are opt-in and
+          // only meaningful in start-to-stop mode (ignored when requireStart is false).
           includeAltStarts: !!state.altStarts
         });
         features = baseFeatures.concat(orf.features);
@@ -2064,6 +2089,12 @@
     });
     $('alt-starts-toggle').addEventListener('change', function () {
       state.altStarts = this.checked;
+      debouncedRescan();
+    });
+    $('orf-mode-select').addEventListener('change', function () {
+      state.requireStart = (this.value !== 'stop');
+      updateOrfModeUI();
+      updateSettingsSummary();
       debouncedRescan();
     });
     $('run-btn').addEventListener('click', function () { if (state.records.length) runScan(); });

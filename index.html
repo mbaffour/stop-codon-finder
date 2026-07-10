@@ -149,13 +149,23 @@
         </div>
 
         <div class="setting" id="minorf-setting" hidden>
+          <label class="setting-label" for="orf-mode-select">ORF definition<span class="help" tabindex="0" role="note" aria-label="ORF definition help" data-tip="Start-to-stop requires an initiator codon (ATG, or GTG/TTG with alternative starts) and approximates real protein-coding genes. Stop-to-stop reports every open reading frame — the full stretch between two in-frame stops — with no start required, giving far more (mostly short, non-coding) frames.">?</span></label>
+          <select id="orf-mode-select" title="Choose how predicted ORFs are defined." aria-describedby="orf-mode-disclaimer">
+            <option value="start">Start-to-stop (requires a start codon)</option>
+            <option value="stop">Stop-to-stop (every open reading frame)</option>
+          </select>
+          <p class="setting-hint orf-disclaimer" id="orf-mode-disclaimer" aria-live="polite" hidden>
+            <strong>Stop-to-stop</strong> reports <em>every</em> open reading frame — the full stretch between two in-frame stop codons, with no start codon required. Essentially every stop codon becomes the terminator of an open frame, so this yields far more frames (roughly 3&times; more than start-to-stop on <em>E. coli</em>), most of them short and non-coding. It is a structural / coding-potential view, <strong>not gene prediction</strong>. The minimum ORF length still applies; the alternative-start setting is ignored.
+          </p>
+
           <label class="setting-label" for="minorf-number">Minimum ORF length</label>
           <div class="slider-row">
             <input type="range" id="minorf-slider" min="1" max="150" step="1" value="30" aria-label="Minimum ORF length in codons">
             <input type="number" id="minorf-number" min="1" max="5000" step="1" value="30" aria-label="Minimum ORF length in codons">
             <span class="unit">codons</span>
           </div>
-          <label class="check" id="altstarts-wrap"><input type="checkbox" id="alt-starts-toggle"> Allow alternative start codons (GTG, TTG)</label>
+          <label class="check" id="altstarts-wrap"><input type="checkbox" id="alt-starts-toggle" aria-describedby="altstarts-ignored-note"> Allow alternative start codons (GTG, TTG)</label>
+          <p class="setting-hint" id="altstarts-ignored-note" aria-live="polite" hidden>Ignored in stop-to-stop mode &mdash; no start codon is required.</p>
         </div>
       </div>
 
@@ -165,7 +175,7 @@
           <p>Sensible defaults are applied automatically &mdash; open this only if you need to know exactly how the scan behaves or you are comparing against another tool.</p>
           <ul>
             <li><strong>Start-codon policy.</strong> ORF prediction (used only when you pick <em>Coding / predicted</em> with no annotation loaded) requires an <code>ATG</code> start by default &mdash; the same default as NCBI ORFfinder and EMBOSS. Tick <em>Allow alternative start codons</em> in the Minimum ORF control to also accept <code>GTG</code>/<code>TTG</code> initiators. One ORF is reported per stop (the longest, 5&prime;-most start), so nested internal-ATG ORFs are not enumerated.</li>
-            <li><strong>Stop-to-stop vs start-to-stop.</strong> Predicted ORFs are <em>start-to-stop</em> (an initiator is required). Stops that merely bound an open stretch with no start are still reported individually in <em>All stop codons</em> mode.</li>
+            <li><strong>Stop-to-stop vs start-to-stop.</strong> The <em>ORF definition</em> control (shown under <em>Coding / predicted</em> with no annotation) picks between the two. <em>Start-to-stop</em> (default) requires an initiator (<code>ATG</code>, or <code>GTG</code>/<code>TTG</code> with alternative starts) and approximates real protein-coding genes. <em>Stop-to-stop</em> reports <em>every</em> open reading frame — the full stretch between two in-frame stops, with no start required — so essentially every stop codon terminates an open frame. That yields far more frames (roughly 3&times; more than start-to-stop on <em>E. coli</em>), most of them short and non-coding; treat it as a structural / coding-potential view, not gene prediction. The minimum ORF length applies to both modes; alternative starts are irrelevant to stop-to-stop.</li>
             <li><strong>Frame convention.</strong> Forward frames <code>+1/+2/+3</code> begin at positions 1/2/3. Reverse frames <code>&minus;1/&minus;2/&minus;3</code> are defined by position in the reverse-complement strand. This is internally consistent but frame <em>labels</em> may not line up 1:1 with ORFfinder or EMBOSS <code>sixpack</code>, which number frames differently.</li>
             <li><strong>Per-feature genetic code.</strong> If your annotation declares one consistent <code>transl_table</code>, it is applied to every contig. Mixed declarations across contigs are not applied per-feature &mdash; a single global code is used and you are warned.</li>
             <li><strong>Ambiguity (IUPAC) codes.</strong> A codon is called a stop only when <em>every</em> A/C/G/T resolution is a stop (so <code>TAR</code> = TAA/TAG counts, <code>TGN</code> does not). Codons containing an <code>N</code> or other ambiguous base that could be a stop under some resolutions are reported as a warning, not silently called.</li>

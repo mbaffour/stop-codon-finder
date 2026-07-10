@@ -567,6 +567,15 @@ th button:focus-visible,
 .slider-row .unit { font-size: 0.82rem; color: var(--text-muted); }
 .check { font-size: 0.82rem; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
 .check input { accent-color: var(--accent); }
+.check.is-disabled { opacity: 0.5; }
+.orf-disclaimer {
+  padding: 8px 10px;
+  border-left: 3px solid var(--accent);
+  background: var(--bg-inset);
+  border-radius: var(--radius-sm);
+  line-height: 1.45;
+  max-width: 46ch;
+}
 
 .settings-summary {
   margin: 16px 0 0;
