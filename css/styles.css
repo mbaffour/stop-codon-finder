@@ -317,6 +317,7 @@ section.card:hover {
    whole card above later sections so the menu is never covered. The hover-lift
    transform above turns each card into a stacking context, which would
    otherwise trap the menu's z-index inside the card. */
+section.card.menu-open,
 section.card:has(.menu-list:not([hidden])) {
   position: relative;
   z-index: 30;

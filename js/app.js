@@ -451,7 +451,11 @@
     state.tableUserSet = false;
     state.modeUserSet = false;
     state.activeTableId = DEFAULT_TABLE_ID;
-    state.mode = state.hasCDS ? 'coding' : 'all';
+    // Default to showing EVERY stop codon in all six frames — the tool's core
+    // job. "Coding / predicted" (terminators only) is one click away. Defaulting
+    // to coding on annotated genomes surprised users (e.g. a 70 kb phage showed
+    // ~98 terminators instead of its ~8,400 stops).
+    state.mode = 'all';
 
     // Fresh load clears the manual organism (a new file should re-detect).
     state.userOrganism = '';
@@ -1902,13 +1906,18 @@
     var btn = $('load-example-btn');
     var list = $('example-list');
     var items = Array.prototype.slice.call(list.querySelectorAll('[role="menuitem"]'));
+    // Elevate the containing card above later sections while the menu is open,
+    // so the dropdown is never covered — a class toggle works in every browser
+    // (the CSS :has() rule is a fallback for engines that support it).
+    var card = btn.closest('section.card');
     function close(returnFocus) {
       if (list.hidden) return;
       list.hidden = true;
       btn.setAttribute('aria-expanded', 'false');
+      if (card) card.classList.remove('menu-open');
       if (returnFocus) btn.focus();
     }
-    function open() { list.hidden = false; btn.setAttribute('aria-expanded', 'true'); }
+    function open() { list.hidden = false; btn.setAttribute('aria-expanded', 'true'); if (card) card.classList.add('menu-open'); }
     function focusItem(i) {
       if (!items.length) return;
       var n = ((i % items.length) + items.length) % items.length;
