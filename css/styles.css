@@ -632,6 +632,10 @@ th button:focus-visible,
 
 .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 0.82rem; color: var(--text-muted); margin-top: 12px; }
 .legend-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+.codon-legend { align-items: center; gap: 8px 16px; margin-top: 0; margin-bottom: 14px; }
+.codon-legend-label { font-weight: 600; color: var(--text-muted); }
+.codon-legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.codon-legend-name { color: var(--text-muted); }
 
 /* --------------------------------- Tables --------------------------------- */
 

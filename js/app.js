@@ -713,6 +713,7 @@
     updateFilterVisibility();
     renderStatCards();
     renderFrameBreakdown();
+    renderCodonLegend();
     renderGeneSummary();
     updateSanityNudge();
     updateReadthroughNote();
@@ -1259,8 +1260,39 @@
     chunk();
   }
 
+  // Colour key for the results table: one entry per stop codon in the ACTIVE
+  // genetic code, using the same pill colours as the table's Codon column, so
+  // you can read a codon's type straight off its colour without the Name column.
+  function renderCodonLegend() {
+    var el = $('codon-legend');
+    if (!el) return;
+    el.innerHTML = '';
+    var label = document.createElement('span');
+    label.className = 'codon-legend-label';
+    label.textContent = 'Colour key:';
+    el.appendChild(label);
+    activeStops().forEach(function (codon) {
+      var name = (global.CodonTables.STOP_NAME && global.CodonTables.STOP_NAME[codon]) || 'stop';
+      var item = document.createElement('span');
+      item.className = 'codon-legend-item';
+      item.setAttribute('role', 'listitem');
+      var pill = document.createElement('span');
+      pill.className = 'codon-pill';
+      pill.style.color = codonColorVar(codon);
+      pill.style.borderColor = 'currentColor';
+      pill.textContent = codon;
+      item.appendChild(pill);
+      var nm = document.createElement('span');
+      nm.className = 'codon-legend-name';
+      nm.textContent = name;
+      item.appendChild(nm);
+      el.appendChild(item);
+    });
+  }
+
   function renderResultsTable() {
     if (!state.summary) return;
+    renderCodonLegend();
     var rows = getFilteredSortedDisplayHits().slice(0, MAX_TABLE_ROWS);
     var tbody = $('results-tbody');
     tbody.innerHTML = '';
