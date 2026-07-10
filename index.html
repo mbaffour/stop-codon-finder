@@ -253,6 +253,12 @@
         <div id="stat-grid" class="stat-grid"></div>
       </section>
 
+      <section class="card" id="totals-card" aria-labelledby="totals-heading">
+        <h2 id="totals-heading">Stop codon totals</h2>
+        <p class="section-intro">How many of each stop codon are present, counted across the whole genome (all six reading frames).</p>
+        <div id="totals-chart" class="totals-chart" role="img" aria-label="Bar chart of the total count of each stop codon type"></div>
+      </section>
+
       <section class="card" id="frame-card" aria-labelledby="frame-heading">
         <h2 id="frame-heading">Per-frame breakdown<span class="help" tabindex="0" role="note" aria-label="Per-frame help" data-tip="A reading frame is one of three ways to group bases into codons on each strand. +1/+2/+3 read the forward strand starting at base 1/2/3; -1/-2/-3 read the reverse-complement strand. Bars are stacked by codon type.">?</span></h2>
         <p class="section-intro">Stop-codon counts across all six reading frames (forward +1/+2/+3, reverse &minus;1/&minus;2/&minus;3), stacked by codon type.</p>

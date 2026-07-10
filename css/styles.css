@@ -739,6 +739,8 @@ html[data-scf-paused] .progress-fill::after { animation-play-state: paused; }
 .codon-legend-label { font-weight: 600; color: var(--text-muted); }
 .codon-legend-item { display: inline-flex; align-items: center; gap: 6px; }
 .codon-legend-name { color: var(--text-muted); }
+.totals-chart { max-width: 600px; }
+.totals-chart svg { display: block; width: 100%; height: auto; }
 /* faint faceted fill behind the (still --codon-ink) legend pill text */
 .codon-legend .codon-pill {
   position: relative;

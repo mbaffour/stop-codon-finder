@@ -1041,7 +1041,33 @@
       '" xmlns="http://www.w3.org/2000/svg" role="presentation">' + parts.join('') + '</svg>';
   }
 
+  // Simple "Stop codon totals" chart: one horizontal bar per stop-codon TYPE
+  // with its total count across the genome. No frame/strand breakdown.
+  function renderStopTotals() {
+    var el = $('totals-chart');
+    if (!el || !state.summary) return;
+    var stops = activeStops();
+    var by = state.summary.byCodon || {};
+    var counts = stops.map(function (c) { return by[c] || 0; });
+    var max = Math.max.apply(null, counts.concat([1]));
+    var rowH = 42, padTop = 8, padBottom = 6, labelW = 150, barX = 158, barMaxW = 380, barH = 22;
+    var W = 640, H = padTop + stops.length * rowH + padBottom;
+    var body = stops.map(function (codon, i) {
+      var count = by[codon] || 0;
+      var name = (global.CodonTables.STOP_NAME && global.CodonTables.STOP_NAME[codon]) || 'stop';
+      var label = codon + (name !== 'stop' ? ' (' + name + ')' : '');
+      var cy = padTop + i * rowH + rowH / 2;
+      var bw = Math.max(2, Math.round((count / max) * barMaxW));
+      var color = 'var(--codon-' + ((i % 6) + 1) + ')';
+      return '<text x="' + (labelW - 10) + '" y="' + cy + '" text-anchor="end" dominant-baseline="central" font-size="14" font-weight="600" fill="var(--text)">' + label + '</text>' +
+        '<rect x="' + barX + '" y="' + (cy - barH / 2) + '" width="' + bw + '" height="' + barH + '" rx="4" fill="' + color + '"></rect>' +
+        '<text x="' + (barX + bw + 8) + '" y="' + cy + '" text-anchor="start" dominant-baseline="central" font-size="13" font-weight="700" fill="var(--text)">' + fmtInt(count) + '</text>';
+    }).join('');
+    el.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="inherit">' + body + '</svg>';
+  }
+
   function renderFrameBreakdown() {
+    renderStopTotals();
     var stops = activeStops();
     var table = tallyFrameCodon(state.displayHits, stops);
     $('frame-chart-container').innerHTML = buildFrameChartSVG(table, stops);
