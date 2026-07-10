@@ -570,9 +570,186 @@
       '@media print{body{background:#fff;}main{max-width:none;padding:0;}th{position:static;}.grid .card.hero{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}';
   }
 
-  /** Trigger a client-side download via Blob + object URL. No server involved. */
+  // ---- Native Excel workbook (.xlsx) -----------------------------------
+  // Assemble the multi-sheet workbook description consumed by CodonXlsx.build().
+  // Reuses the SAME shared column helpers as CSV/TSV (resultsHeader/resultsCells,
+  // geneSummaryHeader/Cells, frameBreakdownHeader/Rows) so the spreadsheet stays
+  // column-consistent with every other tabular export, including the stable id.
+  // Returns an array of { name, header, rows } sheet specs; pure (no DOM), so it
+  // is Node-testable. Pass the FULL hit set (downloads ignore the on-screen
+  // filter). `build()` writes numbers as numeric cells and everything else as
+  // inline strings, so cells here are left as their natural JS types.
+  function buildWorkbook(data) {
+    data = data || {};
+    var s = data.summary || {};
+    var hits = data.hits || [];
+    var stops = data.stops || [];
+    var stopNames = data.stopNames || {};
+    var geneSummary = data.geneSummary || [];
+    var ann = !!data.includeAnnotation;
+    var prov = data.provenance || {};
+    var generatedAt = data.generatedAt || s.generatedAt || new Date().toISOString();
+
+    // --- Summary sheet: label / value rows (+ provenance) ---
+    var sumRows = [['Field', 'Value']];
+    sumRows.push(['Report', 'Stop Codon Finder']);
+    sumRows.push(['Generated', generatedAt]);
+    if (prov.organism) sumRows.push(['Organism', prov.organism]);
+    if (prov.translationTable) {
+      var tt = prov.translationTable;
+      sumRows.push(['Translation table', (tt.id != null ? tt.id + ' — ' : '') + (tt.name || '')]);
+      if (tt.source) sumRows.push(['Table source', String(tt.source)]);
+    }
+    sumRows.push(['Sequences', Number(s.sequenceCount || 0)]);
+    sumRows.push(['Total length (bp)', Number(s.totalLength || 0)]);
+    sumRows.push(['GC content (%)', Number((s.gcPercent || 0).toFixed(2))]);
+    sumRows.push(['Total stop codons', Number(s.totalStops || 0)]);
+    sumRows.push(['Density (per kb)', Number((s.densityPerKb || 0).toFixed(3))]);
+    stops.forEach(function (codon) {
+      var nm = stopNames[codon] || (STOP_NAME_LOCAL[codon]);
+      var label = codon + (nm && nm !== 'stop' ? ' (' + nm + ')' : '');
+      sumRows.push([label, Number((s.byCodon && s.byCodon[codon]) || 0)]);
+    });
+    sumRows.push(['Forward strand (+)', Number((s.byStrand && s.byStrand['+']) || 0)]);
+    sumRows.push(['Reverse strand (−)', Number((s.byStrand && s.byStrand['-']) || 0)]);
+    sumRows.push(['Coordinate convention', COORD_NOTE]);
+
+    var sheets = [{ name: 'Summary', header: true, rows: sumRows }];
+
+    // --- Stop codons sheet: full results table (same columns as CSV) ---
+    var stopRows = [resultsHeader(ann)];
+    for (var i = 0; i < hits.length; i++) stopRows.push(resultsCells(hits[i], ann));
+    sheets.push({ name: 'Stop codons', header: true, rows: stopRows });
+
+    // --- Per-gene sheet (only when a per-gene summary exists) ---
+    if (geneSummary.length) {
+      var geneRows = [geneSummaryHeader()];
+      for (var g = 0; g < geneSummary.length; g++) geneRows.push(geneSummaryCells(geneSummary[g]));
+      sheets.push({ name: 'Per-gene', header: true, rows: geneRows });
+    }
+
+    // --- Per-frame sheet ---
+    var fbTable = buildFrameBreakdown(hits, stops);
+    var frameRows = [frameBreakdownHeader(stops)].concat(frameBreakdownRows(fbTable, stops));
+    sheets.push({ name: 'Per-frame', header: true, rows: frameRows });
+
+    return sheets;
+  }
+
+  var STOP_NAME_LOCAL = { TAA: 'ochre', TAG: 'amber', TGA: 'opal' };
+
+  /**
+   * Build the raw .xlsx bytes (Uint8Array) for the current data. Thin bridge over
+   * CodonXlsx.build(buildWorkbook(data)); returns null if the writer is absent.
+   */
+  function toXlsx(data) {
+    if (!global.CodonXlsx || !global.CodonXlsx.build) return null;
+    return global.CodonXlsx.build(buildWorkbook(data));
+  }
+
+  // ---- Human-readable plain-text report (.txt) -------------------------
+  // A Notepad-friendly summary: title, provenance, the summary stats (counts per
+  // codon / frame / strand, GC%, density) and a short per-frame + top-genes
+  // block. Deliberately NOT the CSV table. Pure string building (no DOM).
+  function toTextReport(data) {
+    data = data || {};
+    var s = data.summary || {};
+    var hits = data.hits || [];
+    var stops = data.stops || [];
+    var stopNames = data.stopNames || {};
+    var geneSummary = data.geneSummary || [];
+    var prov = data.provenance || {};
+    var generatedAt = data.generatedAt || s.generatedAt || new Date().toISOString();
+    var EOL = '\r\n'; // Notepad-friendly CRLF
+
+    function fmtInt(n) { try { return Number(n).toLocaleString('en-US'); } catch (e) { return String(n); } }
+    function rule(ch) { return new Array(61).join(ch || '='); }
+    function pad(str, n) { str = String(str); while (str.length < n) str += ' '; return str; }
+
+    var L = [];
+    L.push('STOP CODON FINDER — REPORT');
+    L.push(rule('='));
+    L.push('Generated: ' + generatedAt);
+
+    // Provenance
+    if (prov.organism) L.push('Organism:  ' + prov.organism);
+    if (prov.translationTable) {
+      var tt = prov.translationTable;
+      L.push('Genetic code: table ' + (tt.id != null ? tt.id : '?') +
+        (tt.name ? ' (' + tt.name + ')' : '') + (tt.source ? ' — from ' + tt.source : ''));
+    }
+    L.push('');
+
+    // Summary stats
+    L.push('SUMMARY');
+    L.push(rule('-'));
+    L.push(pad('Sequences:', 22) + fmtInt(s.sequenceCount || 0));
+    L.push(pad('Total length:', 22) + fmtInt(s.totalLength || 0) + ' bp');
+    L.push(pad('GC content:', 22) + (s.gcPercent || 0).toFixed(1) + ' %');
+    L.push(pad('Total stop codons:', 22) + fmtInt(s.totalStops || 0));
+    L.push(pad('Density:', 22) + (s.densityPerKb || 0).toFixed(2) + ' per kb');
+    L.push('');
+
+    // Per-codon
+    L.push('STOP CODONS BY TYPE');
+    L.push(rule('-'));
+    stops.forEach(function (codon) {
+      var nm = stopNames[codon] || STOP_NAME_LOCAL[codon];
+      var label = codon + (nm && nm !== 'stop' ? ' (' + nm + ')' : '');
+      L.push(pad(label + ':', 22) + fmtInt((s.byCodon && s.byCodon[codon]) || 0));
+    });
+    L.push('');
+
+    // Strand
+    L.push('BY STRAND');
+    L.push(rule('-'));
+    L.push(pad('Forward (+):', 22) + fmtInt((s.byStrand && s.byStrand['+']) || 0));
+    L.push(pad('Reverse (−):', 22) + fmtInt((s.byStrand && s.byStrand['-']) || 0));
+    L.push('');
+
+    // Per-frame block
+    L.push('BY READING FRAME');
+    L.push(rule('-'));
+    var fb = buildFrameBreakdown(hits, stops);
+    var head = frameBreakdownHeader(stops);
+    L.push(head.map(function (h) { return pad(h, 8); }).join(''));
+    frameBreakdownRows(fb, stops).forEach(function (row) {
+      L.push(row.map(function (v) { return pad(v, 8); }).join(''));
+    });
+    L.push('');
+
+    // Top genes by terminator / internal stops (when annotation present)
+    if (geneSummary.length) {
+      L.push('GENES WITH IN-FRAME INTERNAL STOPS (possible pseudogenes / readthrough)');
+      L.push(rule('-'));
+      var flagged = geneSummary.filter(function (r) { return r.internalStops > 0; })
+        .sort(function (a, b) { return b.internalStops - a.internalStops; });
+      if (!flagged.length) {
+        L.push('None — every CDS terminates cleanly with no in-frame internal stop.');
+      } else {
+        L.push(pad('Gene/locus', 26) + pad('Internal', 10) + 'Terminator');
+        flagged.slice(0, 20).forEach(function (r) {
+          var nm = r.gene || r.locusTag || r.featureId || '(unnamed)';
+          L.push(pad(String(nm).slice(0, 25), 26) + pad(String(r.internalStops), 10) +
+            (r.terminatorCodon || '—'));
+        });
+        if (flagged.length > 20) L.push('... and ' + (flagged.length - 20) + ' more.');
+      }
+      L.push('');
+    }
+
+    L.push(rule('='));
+    L.push(COORD_NOTE);
+    L.push('');
+    return L.join(EOL);
+  }
+
+  /** Trigger a client-side download via Blob + object URL. No server involved.
+   *  `content` may be a string, a Uint8Array/ArrayBuffer (binary formats such as
+   *  .xlsx) or a Blob — the Blob constructor accepts all three. */
   function triggerDownload(filename, content, mimeType) {
-    var blob = new Blob([content], { type: mimeType || 'text/plain;charset=utf-8' });
+    var blob = (content instanceof Blob) ? content
+      : new Blob([content], { type: mimeType || 'text/plain;charset=utf-8' });
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
     a.href = url;
@@ -601,6 +778,9 @@
     frameBreakdownToTSV: frameBreakdownToTSV,
     toJSON: toJSON,
     toHTMLReport: toHTMLReport,
+    buildWorkbook: buildWorkbook,
+    toXlsx: toXlsx,
+    toTextReport: toTextReport,
     triggerDownload: triggerDownload
   };
 })(typeof window !== 'undefined' ? window : this);

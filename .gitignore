@@ -7,3 +7,7 @@ testdata/
 Thumbs.db
 node_modules/
 *.log
+
+# Local export test outputs
+*.stop_codons.*
+*.report.html

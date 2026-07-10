@@ -1556,6 +1556,51 @@
     );
   }
 
+  // Shared payload for the workbook + text report: the FULL hit set, the full
+  // summary (never the on-screen filtered slice), provenance, and stop metadata.
+  function reportPayload() {
+    var stops = activeStops();
+    var fullSummary = global.CodonReport.buildSummary(state.hits, state.records, { stopCodons: activeStopSet() });
+    fullSummary.provenance = provenanceMeta();
+    var stopNames = {};
+    stops.forEach(function (c) {
+      stopNames[c] = (global.CodonTables.STOP_NAME && global.CodonTables.STOP_NAME[c]) || 'stop';
+    });
+    return {
+      generatedAt: new Date().toISOString(),
+      summary: fullSummary,
+      provenance: provenanceMeta(),
+      hits: state.hits,
+      geneSummary: state.geneSummary || [],
+      stops: stops,
+      stopNames: stopNames,
+      includeAnnotation: state.annotationActive
+    };
+  }
+
+  function onDownloadXlsx() {
+    if (!state.summary) return;
+    if (!global.CodonXlsx || !global.CodonReport.toXlsx) {
+      showInfo('Excel export is unavailable in this build.'); return;
+    }
+    var bytes = global.CodonReport.toXlsx(reportPayload());
+    if (!bytes) { showInfo('Excel export is unavailable in this build.'); return; }
+    global.CodonReport.triggerDownload(
+      baseFilename() + '.stop_codons.xlsx',
+      bytes,
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
+  }
+
+  function onDownloadText() {
+    if (!state.summary || !global.CodonReport.toTextReport) return;
+    global.CodonReport.triggerDownload(
+      baseFilename() + '.stop_codons.txt',
+      global.CodonReport.toTextReport(reportPayload()),
+      'text/plain;charset=utf-8'
+    );
+  }
+
   // ---- Per-gene summary + per-frame breakdown table downloads ----------
   function onDownloadGeneSummary(fmt) {
     if (!state.geneSummary || !state.geneSummary.length) { showInfo('No per-gene summary to download (load an annotation with CDS features).'); return; }
@@ -1723,6 +1768,8 @@
     var tsv = $('download-tsv-btn'); if (tsv) tsv.addEventListener('click', onDownloadTsv);
     var md = $('download-md-btn'); if (md) md.addEventListener('click', onDownloadMarkdown);
     var html = $('download-html-btn'); if (html) html.addEventListener('click', onDownloadHtmlReport);
+    var xlsx = $('download-xlsx-btn'); if (xlsx) xlsx.addEventListener('click', onDownloadXlsx);
+    var txt = $('download-txt-btn'); if (txt) txt.addEventListener('click', onDownloadText);
     var cpT = $('copy-tsv-btn'); if (cpT) cpT.addEventListener('click', onCopyTsv);
     var cpM = $('copy-md-btn'); if (cpM) cpM.addEventListener('click', onCopyMarkdown);
 
