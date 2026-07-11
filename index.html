@@ -305,6 +305,18 @@
           </div>
         </div>
 
+        <div class="viz-block" id="viz-genemap-block" hidden>
+          <div class="viz-block-head">
+            <h3>Gene / ORF map</h3>
+            <div class="viz-dl" data-viz="genemap">
+              <button type="button" class="btn btn-ghost btn-sm" data-fmt="svg">SVG</button>
+              <button type="button" class="btn btn-ghost btn-sm" data-fmt="png">PNG</button>
+            </div>
+          </div>
+          <p class="viz-note">Each annotated CDS (or predicted ORF) drawn as a directional arrow in its reading-frame lane; the arrowhead is the terminating stop codon, coloured by type. Hover or focus a gene for details, or click to jump to its stop in the table.</p>
+          <div class="viz-scroll"><div id="viz-genemap" class="viz-canvas"></div></div>
+        </div>
+
         <div class="viz-block">
           <div class="viz-block-head">
             <h3>Six-frame stop track</h3>

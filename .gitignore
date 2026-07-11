@@ -11,3 +11,5 @@ node_modules/
 # Local export test outputs
 *.stop_codons.*
 *.report.html
+*.genemap.svg
+*.genemap.png

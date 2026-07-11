@@ -1810,6 +1810,21 @@
       rec: rec, hits: state.displayHits, features: state.runFeatures,
       stops: activeStops(), onSelect: selectHit
     };
+    // Gene / ORF map: shown only when there are genes/ORFs to draw for this
+    // record (annotation CDS, or predicted ORFs in coding mode); hidden for a
+    // pure "all stop codons" run with no annotation.
+    var geneBlock = $('viz-genemap-block');
+    var mapFeats = (state.runFeatures || []).filter(function (f) {
+      return f && f.seqId === rec.id && (f.type === 'CDS' || f.type === 'ORF');
+    });
+    if (mapFeats.length) {
+      if (geneBlock) geneBlock.hidden = false;
+      state.vizSvgs.genemap = global.CodonViz.renderGeneMap($('viz-genemap'), common);
+    } else {
+      if (geneBlock) geneBlock.hidden = true;
+      state.vizSvgs.genemap = null;
+    }
+
     state.vizSvgs.frame = global.CodonViz.renderFrameTrack($('viz-frame'), common);
     state.vizSvgs.density = global.CodonViz.renderDensity($('viz-density'), common);
 

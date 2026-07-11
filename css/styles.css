@@ -880,6 +880,21 @@ tbody tr:hover { background: var(--bg-subtle); }
 .viz-scroll-center { display: flex; justify-content: center; }
 .viz-canvas svg { display: block; max-width: 100%; height: auto; }
 .viz-empty { color: var(--text-muted); font-size: 0.86rem; margin: 12px 4px; }
+.viz-note { color: var(--text-muted); font-size: 0.82rem; margin: 0 0 8px; }
+
+/* Gene / ORF map: per-gene arrows + rich hover/focus tooltip. */
+.gene-glyph { cursor: pointer; }
+.gene-glyph:focus { outline: none; }
+.gene-glyph:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.gene-glyph.viz-hl { outline: 2px solid var(--accent); }
+.viz-tip {
+  position: fixed; z-index: 60; pointer-events: none;
+  background: var(--bg-elevated); color: var(--text);
+  border: 1px solid var(--border-strong); border-radius: var(--radius-md);
+  padding: 6px 9px; font-size: 0.78rem; line-height: 1.35; max-width: 300px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+}
+.viz-tip[hidden] { display: none; }
 
 /* Cross-view linking: hovering a stop in any chart or table row highlights all. */
 .viz-tick { cursor: pointer; }
