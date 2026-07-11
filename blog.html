@@ -71,6 +71,7 @@
     <a class="cta" href="index.html">Open the tool →</a>
     <a class="cta ghost" href="#use">How to use it</a>
     <p class="toc" style="margin-top:22px">
+      <a href="#story">The story</a>
       <a href="#what">What it does</a>
       <a href="#why">Why it's different</a>
       <a href="#use">How to use it</a>
@@ -83,6 +84,29 @@
 </header>
 
 <main class="wrap">
+
+  <section id="story">
+    <h2>Why this exists</h2>
+    <p class="muted" style="margin-top:-6px">A short, honest origin story.</p>
+    <p>My PI asked a simple question: <strong>how many stop codons are in bacteriophage N4?</strong>
+      We needed the number for a project. The sensible move was to run it through
+      <a href="https://usegalaxy.org" target="_blank" rel="noopener">Galaxy</a> — log into a server,
+      find the right tool, grab the answer, move on.</p>
+    <p>Instead I thought: what if I take <em>Claude Code</em> for a fun spin and just… build the thing?
+      Something I actually own — no server to log into, no account, runs entirely in the browser, lives
+      on my GitHub, and I can open it whenever I want and bend it however I like.</p>
+    <p>"Count the stop codons in N4" is, on paper, a tiny task. It did not stay tiny. A little while later
+      it had grown a six-frame scanner, gene-annotation mapping, the full set of NCBI genetic-code tables,
+      CSV / Excel / GFF3 / BED / FASTA exports, colourblind-safe charts, a genome map — and, fittingly,
+      N4 itself is now a one-click example inside the app. Textbook scope creep. No regrets.</p>
+    <p>The punchline: my PI just did it in Galaxy anyway. By then I was far too deep to stop — so here we
+      are. If you need to count stop codons, or you just want a no-server tool you can fork and make your
+      own, <a href="index.html">it's all yours</a>. Enjoy.</p>
+    <p class="muted">For the record, "how many stop codons?" turned out not to be a single number —
+      <strong>8,438</strong> if you count every TAA/TAG/TGA across all six reading frames of N4, but only
+      about <strong>72</strong> that actually terminate a gene. Which one you mean is exactly the kind of
+      thing this tool makes easy to see.</p>
+  </section>
 
   <section id="what">
     <h2>What it does</h2>
