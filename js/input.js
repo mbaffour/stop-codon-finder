@@ -122,12 +122,23 @@
       return { id: id, seq: seqById[id].seq, circular: !!seqById[id].circular };
     });
 
-    // Annotation = union of all features, dedupe by (seqId,type,strand,start,end).
+    // Annotation = union of all features, dedupe by (seqId,type,strand,exon
+    // signature). The exon signature -- not the collapsed start/end -- is load
+    // bearing on circular replicons: genbank.js sets an origin-wrapping join()'s
+    // start/end to minStart/maxEnd (1..L), so phiX174's three overlapping genes
+    // A join(3981..5386,1..136), A* join(4497..5386,1..136) and B
+    // join(5075..5386,1..51) all collapse to 1..5386 and would dedupe to a single
+    // feature, silently dropping A* and B everywhere downstream. Keying on the
+    // segment coordinates keeps distinct genes distinct; a single-segment feature
+    // has segments = [{start,end}], so it keys exactly as before.
     var featSeen = {};
     var features = [];
     parsed.forEach(function (p) {
       p.features.forEach(function (f) {
-        var k = f.seqId + '|' + f.type + '|' + f.strand + '|' + f.start + '|' + f.end;
+        var segSig = (f.segments && f.segments.length)
+          ? f.segments.map(function (s) { return s.start + '-' + s.end; }).join(',')
+          : f.start + '-' + f.end;
+        var k = f.seqId + '|' + f.type + '|' + f.strand + '|' + segSig;
         if (featSeen[k]) return;
         featSeen[k] = 1;
         features.push(f);
